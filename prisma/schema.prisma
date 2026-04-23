@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////
+// ENUMS
+//////////////////////
+
+enum SupplierStatus {
+  ACTIVE
+  UNDER_MONITORING
+  AT_RISK
+  BLOCKED
+  INACTIVE
+}
+
+enum RiskLevel {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum LogisticsStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum Trend {
+  UP
+  DOWN
+  STABLE
+}
+
+//////////////////////
+// USERS & RBAC
+//////////////////////
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  photoUrl     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  roles        UserRole[]
+  comments     Comment[]
+  createdRisks RiskEvent[] @relation("CreatedBy")
+  assignedRisks RiskEvent[] @relation("AssignedTo")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+//////////////////////
+// LOCATION
+//////////////////////
+
+model Country {
+  id        String     @id @default(uuid())
+  name      String
+  isoCode   String
+
+  suppliers Supplier[]
+}
+
+//////////////////////
+// SUPPLIERS
+//////////////////////
+
+model Supplier {
+  id                     String   @id @default(uuid())
+  name                   String
+  supplierCodeSap        String?
+  status                 SupplierStatus
+  address                String?
+  countryId              String
+  riskScore              Int?
+  lastRiskCalculation    DateTime?
+  createdAt              DateTime @default(now())
+
+  country        Country @relation(fields: [countryId], references: [id])
+  contacts       SupplierContact[]
+  riskEvents     RiskEvent[]
+  riskScores     SupplierRiskScore[]
+}
+
+model SupplierContact {
+  id         String   @id @default(uuid())
+  supplierId String
+  name       String
+  email      String?
+  phone      String?
+  position   String?
+  createdAt  DateTime @default(now())
+
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+}
+
+//////////////////////
+// RISK CORE
+//////////////////////
+
+model RiskStatus {
+  id    String @id @default(uuid())
+  name  String
+
+  risks RiskEvent[]
+}
+
+model RiskEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  supplierId  String
+  statusId    String
+  riskLevel   RiskLevel
+  createdById String
+  assignedToId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+
+  supplier   Supplier   @relation(fields: [supplierId], references: [id])
+  status     RiskStatus @relation(fields: [statusId], references: [id])
+
+  createdBy  User @relation("CreatedBy", fields: [createdById], references: [id])
+  assignedTo User? @relation("AssignedTo", fields: [assignedToId], references: [id])
+
+  parts        RiskEventPart[]
+  comments     Comment[]
+  logistics    LogisticsRequest[]
+  statusHistory RiskStatusHistory[]
+}
+
+//////////////////////
+// PARTS
+//////////////////////
+
+model PartNumber {
+  id             String   @id @default(uuid())
+  partNumber     String
+  description    String?
+  vehicleProgram String?
+  createdAt      DateTime @default(now())
+
+  riskParts      RiskEventPart[]
+  buffers        LogisticsBuffer[]
+}
+
+model ImpactLevel {
+  id   String @id @default(uuid())
+  name String
+
+  riskParts RiskEventPart[]
+}
+
+model RiskEventPart {
+  id            String   @id @default(uuid())
+  riskEventId   String
+  partNumberId  String
+  impactLevelId String
+  assignedToId  String?
+  createdAt     DateTime @default(now())
+
+  riskEvent   RiskEvent   @relation(fields: [riskEventId], references: [id])
+  partNumber  PartNumber  @relation(fields: [partNumberId], references: [id])
+  impactLevel ImpactLevel @relation(fields: [impactLevelId], references: [id])
+  assignedTo  User?       @relation(fields: [assignedToId], references: [id])
+}
+
+//////////////////////
+// LOGISTICS
+//////////////////////
+
+model LogisticsRequest {
+  id          String   @id @default(uuid())
+  riskEventId String
+  requestedBy String
+  assignedTo  String?
+  status      LogisticsStatus
+  requestedAt DateTime @default(now())
+  reviewedAt  DateTime?
+  notes       String?
+
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+  requester User @relation(fields: [requestedBy], references: [id])
+  reviewer  User? @relation(fields: [assignedTo], references: [id])
+
+  buffers LogisticsBuffer[]
+}
+
+model LogisticsBuffer {
+  id             String   @id @default(uuid())
+  riskEventId    String
+  partNumberId   String
+  bufferQuantity Int
+  coverageDays   Int
+  validUntil     DateTime?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime @default(now())
+
+  riskEvent  RiskEvent  @relation(fields: [riskEventId], references: [id])
+  partNumber PartNumber @relation(fields: [partNumberId], references: [id])
+  creator    User       @relation(fields: [createdBy], references: [id])
+}
+
+//////////////////////
+// COMMENTS & AUDIT
+//////////////////////
+
+model Comment {
+  id          String   @id @default(uuid())
+  riskEventId String
+  userId      String
+  message     String
+  createdAt   DateTime @default(now())
+
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  action     String
+  oldValue   Json?
+  newValue   Json?
+  changedBy  String
+  createdAt  DateTime @default(now())
+  ipAddress  String?
+
+  user User @relation(fields: [changedBy], references: [id])
+}
+
+//////////////////////
+// ANALYTICS
+//////////////////////
+
+model RiskSnapshot {
+  id               String   @id @default(uuid())
+  snapshotDate     DateTime
+  weekNumber       Int
+  year             Int
+  totalRisks       Int
+  redRisks         Int
+  yellowRisks      Int
+  greenRisks       Int
+  totalPartNumbers Int
+  createdAt        DateTime @default(now())
+}
+
+model SupplierRiskScore {
+  id           String   @id @default(uuid())
+  supplierId   String
+  score        Int
+  probability  Float
+  trend        Trend
+  riskLevel    String
+  calculatedAt DateTime @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+}
+
+//////////////////////
+// HISTORY
+//////////////////////
+
+model RiskStatusHistory {
+  id           String   @id @default(uuid())
+  riskEventId  String
+  oldStatusId  String
+  newStatusId  String
+  changedBy    String
+  changedAt    DateTime @default(now())
+
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+  oldStatus RiskStatus @relation("OldStatus", fields: [oldStatusId], references: [id])
+  newStatus RiskStatus @relation("NewStatus", fields: [newStatusId], references: [id])
+  user      User @relation(fields: [changedBy], references: [id])
+}
