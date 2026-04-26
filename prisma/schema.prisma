@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = "postgresql://placeholder"
 }
 
 //////////////////////
@@ -53,8 +53,19 @@ model User {
 
   roles        UserRole[]
   comments     Comment[]
-  createdRisks RiskEvent[] @relation("CreatedBy")
+
+  createdRisks  RiskEvent[] @relation("CreatedBy")
   assignedRisks RiskEvent[] @relation("AssignedTo")
+
+  requestedLogistics LogisticsRequest[] @relation("LogisticsRequester")
+  reviewedLogistics  LogisticsRequest[] @relation("LogisticsReviewer")
+
+  riskPartsAssigned RiskEventPart[] @relation("RiskPartAssignedTo")
+
+  buffersCreated LogisticsBuffer[] @relation("BufferCreator")
+
+  auditLogs AuditLog[]
+  statusChanges RiskStatusHistory[]
 }
 
 model Role {
@@ -76,8 +87,8 @@ model UserRole {
   userId String
   roleId String
 
-  user   User @relation(fields: [userId], references: [id])
-  role   Role @relation(fields: [roleId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
 
   @@id([userId, roleId])
 }
@@ -86,8 +97,8 @@ model RolePermission {
   roleId       String
   permissionId String
 
-  role         Role @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
 }
@@ -97,9 +108,9 @@ model RolePermission {
 //////////////////////
 
 model Country {
-  id        String     @id @default(uuid())
-  name      String
-  isoCode   String
+  id      String @id @default(uuid())
+  name    String
+  isoCode String @unique
 
   suppliers Supplier[]
 }
@@ -109,20 +120,20 @@ model Country {
 //////////////////////
 
 model Supplier {
-  id                     String   @id @default(uuid())
-  name                   String
-  supplierCodeSap        String?
-  status                 SupplierStatus
-  address                String?
-  countryId              String
-  riskScore              Int?
-  lastRiskCalculation    DateTime?
-  createdAt              DateTime @default(now())
+  id                  String   @id @default(uuid())
+  name                String
+  supplierCodeSap     String?
+  status              SupplierStatus
+  address             String?
+  countryId           String
+  riskScore           Int?
+  lastRiskCalculation DateTime?
+  createdAt           DateTime @default(now())
 
-  country        Country @relation(fields: [countryId], references: [id])
-  contacts       SupplierContact[]
-  riskEvents     RiskEvent[]
-  riskScores     SupplierRiskScore[]
+  country     Country             @relation(fields: [countryId], references: [id])
+  contacts    SupplierContact[]
+  riskEvents  RiskEvent[]
+  riskScores  SupplierRiskScore[]
 }
 
 model SupplierContact {
@@ -134,7 +145,7 @@ model SupplierContact {
   position   String?
   createdAt  DateTime @default(now())
 
-  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
 }
 
 //////////////////////
@@ -142,34 +153,36 @@ model SupplierContact {
 //////////////////////
 
 model RiskStatus {
-  id    String @id @default(uuid())
-  name  String
+  id   String @id @default(uuid())
+  name String
 
   risks RiskEvent[]
+  oldHistory RiskStatusHistory[] @relation("OldStatus")
+  newHistory RiskStatusHistory[] @relation("NewStatus")
 }
 
 model RiskEvent {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  supplierId  String
-  statusId    String
-  riskLevel   RiskLevel
-  createdById String
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  supplierId   String
+  statusId     String
+  riskLevel    RiskLevel
+  createdById  String
   assignedToId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  closedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  closedAt     DateTime?
 
-  supplier   Supplier   @relation(fields: [supplierId], references: [id])
-  status     RiskStatus @relation(fields: [statusId], references: [id])
+  supplier Supplier   @relation(fields: [supplierId], references: [id])
+  status   RiskStatus @relation(fields: [statusId], references: [id])
 
-  createdBy  User @relation("CreatedBy", fields: [createdById], references: [id])
+  createdBy  User  @relation("CreatedBy", fields: [createdById], references: [id])
   assignedTo User? @relation("AssignedTo", fields: [assignedToId], references: [id])
 
-  parts        RiskEventPart[]
-  comments     Comment[]
-  logistics    LogisticsRequest[]
+  parts         RiskEventPart[]
+  comments      Comment[]
+  logistics     LogisticsRequest[]
   statusHistory RiskStatusHistory[]
 }
 
@@ -184,8 +197,8 @@ model PartNumber {
   vehicleProgram String?
   createdAt      DateTime @default(now())
 
-  riskParts      RiskEventPart[]
-  buffers        LogisticsBuffer[]
+  riskParts RiskEventPart[]
+  buffers   LogisticsBuffer[]
 }
 
 model ImpactLevel {
@@ -206,7 +219,8 @@ model RiskEventPart {
   riskEvent   RiskEvent   @relation(fields: [riskEventId], references: [id])
   partNumber  PartNumber  @relation(fields: [partNumberId], references: [id])
   impactLevel ImpactLevel @relation(fields: [impactLevelId], references: [id])
-  assignedTo  User?       @relation(fields: [assignedToId], references: [id])
+
+  assignedTo  User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
 }
 
 //////////////////////
@@ -224,26 +238,28 @@ model LogisticsRequest {
   notes       String?
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
-  requester User @relation(fields: [requestedBy], references: [id])
-  reviewer  User? @relation(fields: [assignedTo], references: [id])
+
+  requester User  @relation("LogisticsRequester", fields: [requestedBy], references: [id])
+  reviewer  User? @relation("LogisticsReviewer", fields: [assignedTo], references: [id])
 
   buffers LogisticsBuffer[]
 }
 
 model LogisticsBuffer {
-  id             String   @id @default(uuid())
-  riskEventId    String
-  partNumberId   String
-  bufferQuantity Int
-  coverageDays   Int
-  validUntil     DateTime?
-  notes          String?
-  createdBy      String
-  createdAt      DateTime @default(now())
+  id                   String   @id @default(uuid())
+  logisticsRequestId   String
+  partNumberId         String
+  bufferQuantity       Int
+  coverageDays         Int
+  validUntil           DateTime?
+  notes                String?
+  createdBy            String
+  createdAt            DateTime @default(now())
 
-  riskEvent  RiskEvent  @relation(fields: [riskEventId], references: [id])
-  partNumber PartNumber @relation(fields: [partNumberId], references: [id])
-  creator    User       @relation(fields: [createdBy], references: [id])
+  logisticsRequest LogisticsRequest @relation(fields: [logisticsRequestId], references: [id])
+  partNumber       PartNumber       @relation(fields: [partNumberId], references: [id])
+
+  creator User @relation("BufferCreator", fields: [createdBy], references: [id])
 }
 
 //////////////////////
@@ -317,7 +333,9 @@ model RiskStatusHistory {
   changedAt    DateTime @default(now())
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+
   oldStatus RiskStatus @relation("OldStatus", fields: [oldStatusId], references: [id])
   newStatus RiskStatus @relation("NewStatus", fields: [newStatusId], references: [id])
-  user      User @relation(fields: [changedBy], references: [id])
+
+  user User @relation(fields: [changedBy], references: [id])
 }
