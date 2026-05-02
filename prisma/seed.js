@@ -1,45 +1,138 @@
 const { PrismaClient } = require('@prisma/client')
-
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log("SEED INICIADO 🚀")
+
+  // =========================
+  // PERMISSIONS
+  // =========================
+  const permissions = [
+    'USER_MANAGE',
+    'SUPPLIER_VIEW',
+    'SUPPLIER_CREATE',
+    'SUPPLIER_UPDATE',
+    'RISK_VIEW',
+    'RISK_CREATE',
+    'RISK_UPDATE',
+    'RISK_ASSIGN',
+    'RISK_CLOSE',
+    'LOGISTICS_REQUEST_CREATE',
+    'LOGISTICS_REQUEST_REVIEW',
+    'LOGISTICS_BUFFER_MANAGE',
+    'COMMENT_CREATE',
+    'COMMENT_VIEW',
+    'DASHBOARD_VIEW',
+    'ANALYTICS_VIEW'
+  ]
+
+  await prisma.permission.createMany({
+    data: permissions.map(name => ({ name })),
+    skipDuplicates: true
+  })
+
+  // =========================
+  // ROLES
+  // =========================
+  const roles = [
+    'ADMIN',
+    'RISK_MANAGER',
+    'RISK_ANALYST',
+    'LOGISTICS',
+    'VIEWER'
+  ]
 
   await prisma.role.createMany({
-    data: [
-      { name: 'ADMIN' },
-      { name: 'RISK_MANAGER' },
-      { name: 'LOGISTICS' }
-    ],
+    data: roles.map(name => ({ name })),
     skipDuplicates: true
   })
 
-  await prisma.riskStatus.createMany({
-    data: [
-      { name: 'OPEN' },
-      { name: 'MITIGATING' },
-      { name: 'RESOLVED' },
-      { name: 'CLOSED' }
-    ],
-    skipDuplicates: true
-  })
+  // =========================
+  // HELPERS
+  // =========================
+  const getRole = (name) =>
+    prisma.role.findUnique({ where: { name } })
 
-  await prisma.impactLevel.createMany({
-    data: [
-      { name: 'HIGH' },
-      { name: 'MEDIUM' },
-      { name: 'LOW' }
-    ],
-    skipDuplicates: true
-  })
+  const getPermissions = (names) =>
+    prisma.permission.findMany({
+      where: { name: { in: names } }
+    })
 
-  console.log("Seed executado com sucesso 🚀")
+  const assignPermissions = async (roleName, permNames) => {
+    const role = await getRole(roleName)
+    const perms = await getPermissions(permNames)
+
+    for (const perm of perms) {
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: role.id,
+            permissionId: perm.id
+          }
+        },
+        update: {},
+        create: {
+          roleId: role.id,
+          permissionId: perm.id
+        }
+      })
+    }
+  }
+
+  // =========================
+  // ASSIGNMENTS
+  // =========================
+
+  // ADMIN → todas
+  await assignPermissions('ADMIN', permissions)
+
+  // RISK_MANAGER
+  await assignPermissions('RISK_MANAGER', [
+    'SUPPLIER_VIEW',
+    'SUPPLIER_UPDATE',
+    'RISK_VIEW',
+    'RISK_CREATE',
+    'RISK_UPDATE',
+    'RISK_ASSIGN',
+    'RISK_CLOSE',
+    'COMMENT_CREATE',
+    'COMMENT_VIEW',
+    'DASHBOARD_VIEW',
+    'ANALYTICS_VIEW'
+  ])
+
+  // RISK_ANALYST
+  await assignPermissions('RISK_ANALYST', [
+    'SUPPLIER_VIEW',
+    'RISK_VIEW',
+    'RISK_CREATE',
+    'RISK_UPDATE',
+    'COMMENT_CREATE',
+    'COMMENT_VIEW',
+    'DASHBOARD_VIEW'
+  ])
+
+  // LOGISTICS
+  await assignPermissions('LOGISTICS', [
+    'SUPPLIER_VIEW',
+    'RISK_VIEW',
+    'LOGISTICS_REQUEST_REVIEW',
+    'LOGISTICS_BUFFER_MANAGE',
+    'COMMENT_CREATE',
+    'COMMENT_VIEW',
+    'DASHBOARD_VIEW'
+  ])
+
+  // VIEWER
+  await assignPermissions('VIEWER', [
+    'SUPPLIER_VIEW',
+    'RISK_VIEW',
+    'COMMENT_VIEW',
+    'DASHBOARD_VIEW'
+  ])
+
+  console.log("RBAC Seed concluído ✅")
 }
 
 main()
-  .catch((e) => {
-    console.error(e)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+  .catch(console.error)
+  .finally(() => prisma.$disconnect())
