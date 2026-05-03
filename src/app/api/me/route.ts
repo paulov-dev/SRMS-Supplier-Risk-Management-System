@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getUserFromRequest } from '@/lib/getUserFromToken'
+import { getUserFromRequest } from '../lib/getUserFromToken'
 
 export async function GET(req: Request) {
   try {
