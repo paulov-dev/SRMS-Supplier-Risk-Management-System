@@ -2,11 +2,8 @@ import { NextResponse } from 'next/server'
 import { getUserFromRequest } from './getUserFromToken'
 import { hasPermission } from './permissions'
 
-export async function requirePermission(
-  req: Request,
-  permission: string
-) {
-  const user = await getUserFromRequest(req)
+export async function requirePermission(permission: string) {
+  const user = await getUserFromRequest()
 
   if (!user) {
     throw NextResponse.json(
@@ -15,14 +12,12 @@ export async function requirePermission(
     )
   }
 
-  const allowed = hasPermission(user, permission)
-
-  if (!allowed) {
+  if (!hasPermission(user, permission)) {
     throw NextResponse.json(
       { error: 'Sem permissão' },
       { status: 403 }
     )
   }
-  
+
   return user
 }

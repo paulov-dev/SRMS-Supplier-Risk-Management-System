@@ -1,37 +1,43 @@
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
-import { verifyToken } from './auth'
-
 const prisma = new PrismaClient()
 
-export async function getUserFromRequest(req: Request) {
-  const authHeader = req.headers.get('authorization')
+const JWT_SECRET = process.env.JWT_SECRET!
 
-  if (!authHeader) return null
+export async function getUserFromRequest() {
+  const cookieStore = await cookies()
 
-  const token = authHeader.split(' ')[1]
+  const token = cookieStore.get('token')?.value
 
-  const decoded = verifyToken(token) as any
+  if (!token) return null
 
-  if (!decoded) return null
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any
 
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.userId },
-    include: {
-      roles: {
-        include: {
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true
+    const user = await prisma.user.findUnique({
+      where: {
+        id: decoded.userId
+      },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
                 }
               }
             }
           }
         }
       }
-    }
-  })
+    })
 
-  return user
+    return user
+  } catch {
+    return null
+  }
 }
