@@ -12,7 +12,7 @@ export async function GET(req: Request) {
       )
     }
 
-    // 🔥 Flatten das permissões
+    // Flatten das permissões
     const permissions = [
     ...new Set(
         user.roles.flatMap((ur) =>

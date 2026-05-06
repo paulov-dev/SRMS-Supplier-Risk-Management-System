@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/requirePermission'
+import { requirePermission } from '@/app/api/lib/requirePermission'
 
 export async function GET(req: Request) {
   try {
