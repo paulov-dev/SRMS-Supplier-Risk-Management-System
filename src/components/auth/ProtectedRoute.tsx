@@ -21,7 +21,7 @@ export function ProtectedRoute({
 
     // Não autenticado
     if (!user) {
-      router.push('/login')
+      router.push('/')
       return
     }
 

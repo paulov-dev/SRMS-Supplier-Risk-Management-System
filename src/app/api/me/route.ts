@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getUserFromRequest } from '../lib/getUserFromToken'
+import { getUserFromRequest } from '@/app/api/lib/getUserFromToken'
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const user = await getUserFromRequest(req)
+    const user = await getUserFromRequest()
 
     if (!user) {
       return NextResponse.json(
@@ -12,16 +12,19 @@ export async function GET(req: Request) {
       )
     }
 
-    // Flatten das permissões
     const permissions = [
-    ...new Set(
+      ...new Set(
         user.roles.flatMap((ur) =>
-        ur.role.permissions.map((rp) => rp.permission.name)
+          ur.role.permissions.map(
+            (rp) => rp.permission.name
+          )
         )
-    )
+      )
     ]
 
-    const roles = user.roles.map((ur) => ur.role.name)
+    const roles = user.roles.map(
+      (ur) => ur.role.name
+    )
 
     return NextResponse.json({
       id: user.id,
@@ -31,7 +34,8 @@ export async function GET(req: Request) {
       roles,
       permissions
     })
-  } catch (error) {
+
+  } catch {
     return NextResponse.json(
       { error: 'Erro interno' },
       { status: 500 }

@@ -4,9 +4,12 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { login } from "@/services/auth/login"
+import { useAuth } from "@/contexts/AuthContext"
 
 import { cn } from "@/lib/utils"
+
 import { Button } from "@/components/ui/button"
+
 import {
   Card,
   CardContent,
@@ -14,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+
 import {
   Field,
   FieldDescription,
@@ -21,6 +25,7 @@ import {
   FieldLabel,
   FieldSeparator,
 } from "@/components/ui/field"
+
 import { Input } from "@/components/ui/input"
 
 export function LoginForm({
@@ -29,11 +34,16 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter()
 
+  const { refreshUser } = useAuth()
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
     e.preventDefault()
+
     setError(null)
     setLoading(true)
 
@@ -43,22 +53,38 @@ export function LoginForm({
     const password = formData.get("password") as string
 
     try {
+      // LOGIN
       await login(email, password)
 
-      // ✅ sucesso → redireciona
+      // atualiza contexto global
+      await refreshUser()
+
+      // redirect
       router.push("/dashboard")
+
     } catch (err: any) {
-      setError(err.message)
+      setError(
+        err.message || "Erro ao realizar login"
+      )
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div
+      className={cn(
+        "flex flex-col gap-6",
+        className
+      )}
+      {...props}
+    >
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Bem vindo de volta</CardTitle>
+          <CardTitle className="text-xl">
+            Bem vindo de volta
+          </CardTitle>
+
           <CardDescription>
             Realize login na sua conta para continuar.
           </CardDescription>
@@ -69,8 +95,12 @@ export function LoginForm({
             <FieldGroup>
               <FieldSeparator />
 
+              {/* EMAIL */}
               <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">
+                  Email
+                </FieldLabel>
+
                 <Input
                   id="email"
                   name="email"
@@ -80,10 +110,14 @@ export function LoginForm({
                 />
               </Field>
 
+              {/* PASSWORD */}
               <Field>
-                <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Senha</FieldLabel>
+                <div className="flex items-center justify-between">
+                  <FieldLabel htmlFor="password">
+                    Senha
+                  </FieldLabel>
                 </div>
+
                 <Input
                   id="password"
                   name="password"
@@ -92,18 +126,33 @@ export function LoginForm({
                 />
               </Field>
 
-              {/* ❌ erro */}
+              {/* ERROR */}
               {error && (
-                <p className="text-sm text-red-500 text-center">{error}</p>
+                <p className="text-center text-sm text-red-500">
+                  {error}
+                </p>
               )}
 
+              {/* BUTTON */}
               <Field>
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Entrando..." : "Entrar"}
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full"
+                >
+                  {loading
+                    ? "Entrando..."
+                    : "Entrar"}
                 </Button>
 
                 <FieldDescription className="text-center">
-                  Não tem uma conta? <a href="#">Solicite acesso</a>
+                  Não tem uma conta?{" "}
+                  <a
+                    href="#"
+                    className="underline underline-offset-4"
+                  >
+                    Solicite acesso
+                  </a>
                 </FieldDescription>
               </Field>
             </FieldGroup>
