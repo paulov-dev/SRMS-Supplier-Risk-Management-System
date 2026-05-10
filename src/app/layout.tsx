@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./styles/globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "next-themes";
+import { AuthProvider } from '@/contexts/AuthContext'
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -44,7 +45,9 @@ export default function RootLayout({
           defaultTheme="dark"
           enableSystem={false}
         >
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>          
         </ThemeProvider>
       </body>
     </html>
