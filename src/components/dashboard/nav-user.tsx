@@ -1,5 +1,10 @@
 "use client"
 
+import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
+
+
+
 import {
   IconCreditCard,
   IconDotsVertical,
@@ -39,6 +44,15 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+
+  const { logout } = useAuth()
+  const router = useRouter()
+
+  async function handleLogout() {
+    await logout()
+
+    router.push('/')
+  }
 
   return (
     <SidebarMenu>
@@ -98,9 +112,9 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={handleLogout}>
               <IconLogout />
-              Log out
+              Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

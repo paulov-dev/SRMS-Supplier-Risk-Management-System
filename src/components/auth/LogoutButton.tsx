@@ -12,7 +12,7 @@ export function LogoutButton() {
   async function handleLogout() {
     await logout()
 
-    router.push('/login')
+    router.push('/')
   }
 
   return (
