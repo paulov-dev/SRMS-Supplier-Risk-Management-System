@@ -41,6 +41,11 @@ export function AppSidebar({
 }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
 
+  const hasPermission = (permission?: string) => {
+    if (!permission) return true
+    return user?.permissions?.includes(permission)
+  }
+
   const data = {
     user: {
       name: user?.name || "Paulo Ferraz",
@@ -51,28 +56,33 @@ export function AppSidebar({
     navMain: [
       {
         title: "Dashboard",
-        url: "#",
+        url: "/dashboard",
         icon: IconDashboard,
+        permission: "DASHBOARD_VIEW",
       },
       {
-        title: "Lifecycle",
-        url: "#",
+        title: "RMs",
+        url: "/rms",
         icon: IconListDetails,
+        permission: "RISK_VIEW",
+      },
+      {
+        title: "Usuários",
+        url: "/users",
+        icon: IconUsers,
+        permission: "USER_MANAGE",
       },
       {
         title: "Analytics",
         url: "#",
         icon: IconChartBar,
+        permission: "USER_MANAGE",
       },
       {
         title: "Projects",
         url: "#",
         icon: IconFolder,
-      },
-      {
-        title: "Team",
-        url: "#",
-        icon: IconUsers,
+        permission: "USER_MANAGE",
       },
     ],
 
@@ -162,6 +172,10 @@ export function AppSidebar({
     ],
   }
 
+  const filteredNavMain = data.navMain.filter((item) =>
+    hasPermission(item.permission)
+  )
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -171,10 +185,10 @@ export function AppSidebar({
               asChild
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
-              <a href="#">
+              <a href="/dashboard" className="flex items-center gap-2">
                 <IconInnerShadowTop className="size-5!" />
                 <span className="text-base font-semibold">
-                  Acme Inc.
+                  SRMS | Supplier Risk Management System
                 </span>
               </a>
             </SidebarMenuButton>
@@ -183,7 +197,7 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={filteredNavMain} />
         <NavDocuments items={data.documents} />
         <NavSecondary
           items={data.navSecondary}
