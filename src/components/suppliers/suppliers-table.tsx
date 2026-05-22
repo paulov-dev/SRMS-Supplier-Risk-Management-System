@@ -191,7 +191,7 @@ export function SuppliersTable({
             <DropdownMenuItem
               onClick={() =>
                 router.push(
-                  `/dashboard/suppliers/${row.original.id}`
+                  `/suppliers/${row.original.id}`
                 )
               }
             >
