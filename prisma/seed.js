@@ -9,6 +9,7 @@ async function main() {
   // =========================
   const permissions = [
     'USER_MANAGE',
+    'SUPPLIER_MANAGE',
     'SUPPLIER_VIEW',
     'SUPPLIER_CREATE',
     'SUPPLIER_UPDATE',

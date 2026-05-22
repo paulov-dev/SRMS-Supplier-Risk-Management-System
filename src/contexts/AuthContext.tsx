@@ -18,8 +18,11 @@ type User = {
 type AuthContextType = {
   user: User | null
   loading: boolean
+
   refreshUser: () => Promise<void>
   logout: () => Promise<void>
+
+  hasPermission: (permission: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType>(
@@ -64,6 +67,12 @@ export function AuthProvider({
     setUser(null)
   }
 
+  function hasPermission(permission: string) {
+    if (!user) return false
+
+    return user.permissions.includes(permission)
+  }
+
   useEffect(() => {
     refreshUser()
   }, [])
@@ -75,6 +84,7 @@ export function AuthProvider({
         loading,
         refreshUser,
         logout,
+        hasPermission,
       }}
     >
       {children}
