@@ -122,8 +122,8 @@ model Country {
 model Supplier {
   id                  String   @id @default(uuid())
   name                String
-  supplierCodeSap     String?
-  status              SupplierStatus
+  supplierCodeSap     String? @unique
+  status              SupplierStatus @default(ACTIVE)
   address             String?
   countryId           String
   riskScore           Int?
