@@ -19,16 +19,49 @@ enum SupplierStatus {
   INACTIVE
 }
 
+enum RiskCodePrefix {
+  RM
+  IRM
+}
+
+enum RiskOpeningReason {
+  TIER_2_CHANGE
+  PLANT_CHANGE
+  SUPPLIER_TRANSFER_PHASE_OUT
+  MANUFACTURING_PROCESS_CHANGE
+}
+
+enum RiskWorkflowStatus {
+  OPEN
+  CLOSED
+  CANCELED
+}
+
 enum RiskLevel {
   GREEN
   YELLOW
   RED
 }
 
+enum PartRiskStatus {
+  RED
+  YELLOW
+  GREEN
+  ORANGE
+  GREY
+  BLUE
+}
+
 enum LogisticsStatus {
   PENDING
-  IN_REVIEW
   APPROVED
+  REJECTED
+}
+
+enum RiskPartLogisticsStatus {
+  NOT_REQUESTED
+  PENDING
+  IN_LOGISTICS
   REJECTED
 }
 
@@ -36,6 +69,12 @@ enum Trend {
   UP
   DOWN
   STABLE
+}
+
+model RiskSequence {
+  key           String   @id
+  currentNumber Int      @default(0)
+  updatedAt     DateTime @updatedAt
 }
 
 //////////////////////
@@ -56,11 +95,15 @@ model User {
 
   createdRisks  RiskEvent[] @relation("CreatedBy")
   assignedRisks RiskEvent[] @relation("AssignedTo")
+  closedRisks   RiskEvent[] @relation("ClosedBy")
 
   requestedLogistics LogisticsRequest[] @relation("LogisticsRequester")
   reviewedLogistics  LogisticsRequest[] @relation("LogisticsReviewer")
 
   riskPartsAssigned RiskEventPart[] @relation("RiskPartAssignedTo")
+
+  createdActionPlans  RiskActionPlan[] @relation("ActionPlanCreatedBy")
+  assignedActionPlans RiskActionPlan[] @relation("ActionPlanAssignedTo")
 
   buffersCreated LogisticsBuffer[] @relation("BufferCreator")
 
@@ -152,38 +195,82 @@ model SupplierContact {
 // RISK CORE
 //////////////////////
 
-model RiskStatus {
-  id   String @id @default(uuid())
-  name String
-
-  risks RiskEvent[]
-  oldHistory RiskStatusHistory[] @relation("OldStatus")
-  newHistory RiskStatusHistory[] @relation("NewStatus")
-}
-
 model RiskEvent {
-  id           String   @id @default(uuid())
-  title        String
-  description  String?
-  supplierId   String
-  statusId     String
-  riskLevel    RiskLevel
-  createdById  String
-  assignedToId String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  closedAt     DateTime?
+  id             String   @id @default(uuid())
 
-  supplier Supplier   @relation(fields: [supplierId], references: [id])
-  status   RiskStatus @relation(fields: [statusId], references: [id])
+  code           String   @unique
+  sequenceNumber Int      @unique
+  codePrefix     RiskCodePrefix
+
+  title          String?
+  description    String?
+
+  openingReason  RiskOpeningReason
+
+  supplierId     String
+
+  workflowStatus RiskWorkflowStatus @default(OPEN)
+  riskLevel      RiskLevel          @default(GREEN)
+
+  createdWeek    Int
+  createdYear    Int
+
+  createdById    String
+  assignedToId   String?
+  closedById     String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  closedAt       DateTime?
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
 
   createdBy  User  @relation("CreatedBy", fields: [createdById], references: [id])
   assignedTo User? @relation("AssignedTo", fields: [assignedToId], references: [id])
+  closedBy   User? @relation("ClosedBy", fields: [closedById], references: [id])
 
   parts         RiskEventPart[]
+  actionPlans   RiskActionPlan[]
   comments      Comment[]
   logistics     LogisticsRequest[]
   statusHistory RiskStatusHistory[]
+
+  @@index([code])
+  @@index([sequenceNumber])
+  @@index([supplierId])
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([workflowStatus])
+  @@index([riskLevel])
+  @@index([createdWeek, createdYear])
+}
+
+model RiskActionPlan {
+  id          String   @id @default(uuid())
+  riskEventId String
+
+  description String
+  dueDate     DateTime
+
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+
+  createdById  String
+  assignedToId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+
+  createdBy  User @relation("ActionPlanCreatedBy", fields: [createdById], references: [id])
+  assignedTo User @relation("ActionPlanAssignedTo", fields: [assignedToId], references: [id])
+
+  @@index([riskEventId])
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([dueDate])
+  @@index([isCompleted])
 }
 
 //////////////////////
@@ -192,35 +279,41 @@ model RiskEvent {
 
 model PartNumber {
   id             String   @id @default(uuid())
-  partNumber     String
+  partNumber     String   @unique
   description    String?
   vehicleProgram String?
   createdAt      DateTime @default(now())
 
   riskParts RiskEventPart[]
   buffers   LogisticsBuffer[]
-}
 
-model ImpactLevel {
-  id   String @id @default(uuid())
-  name String
-
-  riskParts RiskEventPart[]
+  @@index([partNumber])
 }
 
 model RiskEventPart {
-  id            String   @id @default(uuid())
-  riskEventId   String
-  partNumberId  String
-  impactLevelId String
-  assignedToId  String?
-  createdAt     DateTime @default(now())
+  id           String   @id @default(uuid())
+  riskEventId  String
+  partNumberId String
 
-  riskEvent   RiskEvent   @relation(fields: [riskEventId], references: [id])
-  partNumber  PartNumber  @relation(fields: [partNumberId], references: [id])
-  impactLevel ImpactLevel @relation(fields: [impactLevelId], references: [id])
+  status PartRiskStatus @default(GREEN)
 
-  assignedTo  User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
+  logisticsStatus RiskPartLogisticsStatus @default(NOT_REQUESTED)
+
+  assignedToId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  riskEvent  RiskEvent  @relation(fields: [riskEventId], references: [id])
+  partNumber PartNumber @relation(fields: [partNumberId], references: [id])
+
+  assignedTo User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
+
+  @@unique([riskEventId, partNumberId])
+  @@index([riskEventId])
+  @@index([partNumberId])
+  @@index([status])
+  @@index([logisticsStatus])
 }
 
 //////////////////////
@@ -228,14 +321,19 @@ model RiskEventPart {
 //////////////////////
 
 model LogisticsRequest {
-  id          String   @id @default(uuid())
+  id          String          @id @default(uuid())
   riskEventId String
+
   requestedBy String
   assignedTo  String?
-  status      LogisticsStatus
+
+  status      LogisticsStatus @default(PENDING)
+
   requestedAt DateTime @default(now())
   reviewedAt  DateTime?
+
   notes       String?
+  rejectionReason String?
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
 
@@ -243,6 +341,12 @@ model LogisticsRequest {
   reviewer  User? @relation("LogisticsReviewer", fields: [assignedTo], references: [id])
 
   buffers LogisticsBuffer[]
+
+  @@index([riskEventId])
+  @@index([requestedBy])
+  @@index([assignedTo])
+  @@index([status])
+  @@index([requestedAt])
 }
 
 model LogisticsBuffer {
@@ -260,6 +364,10 @@ model LogisticsBuffer {
   partNumber       PartNumber       @relation(fields: [partNumberId], references: [id])
 
   creator User @relation("BufferCreator", fields: [createdBy], references: [id])
+
+  @@index([logisticsRequestId])
+  @@index([partNumberId])
+  @@index([createdBy])
 }
 
 //////////////////////
@@ -289,6 +397,13 @@ model AuditLog {
   ipAddress  String?
 
   user User @relation(fields: [changedBy], references: [id])
+
+  @@index([changedBy])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType, entityId])
 }
 
 //////////////////////
@@ -325,17 +440,17 @@ model SupplierRiskScore {
 //////////////////////
 
 model RiskStatusHistory {
-  id           String   @id @default(uuid())
-  riskEventId  String
-  oldStatusId  String
-  newStatusId  String
-  changedBy    String
-  changedAt    DateTime @default(now())
+  id          String             @id @default(uuid())
+  riskEventId String
+  oldStatus   RiskWorkflowStatus
+  newStatus   RiskWorkflowStatus
+  changedBy   String
+  changedAt   DateTime           @default(now())
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+  user      User      @relation(fields: [changedBy], references: [id])
 
-  oldStatus RiskStatus @relation("OldStatus", fields: [oldStatusId], references: [id])
-  newStatus RiskStatus @relation("NewStatus", fields: [newStatusId], references: [id])
-
-  user User @relation(fields: [changedBy], references: [id])
+  @@index([riskEventId])
+  @@index([changedBy])
+  @@index([changedAt])
 }

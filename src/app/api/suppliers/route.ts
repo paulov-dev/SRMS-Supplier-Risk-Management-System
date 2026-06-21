@@ -1,235 +1,392 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 
-import { prisma } from '@/app/api/lib/prisma'
+import { prisma } from "@/app/api/lib/prisma"
+import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 
-import { requirePermission } from '@/app/api/lib/requirePermission'
+function getPermissions(user: any) {
+  return [
+    ...new Set(
+      user.roles.flatMap((ur: any) =>
+        ur.role.permissions.map(
+          (rp: any) => rp.permission.name
+        )
+      )
+    ),
+  ]
+}
+
+function normalizeIp(ip: string | null) {
+  if (!ip) return null
+
+  const cleanIp = ip.split(",")[0]?.trim()
+
+  if (!cleanIp) return null
+
+  if (cleanIp.startsWith("::ffff:")) {
+    return cleanIp.replace("::ffff:", "")
+  }
+
+  if (cleanIp === "::1") {
+    return "127.0.0.1"
+  }
+
+  return cleanIp
+}
+
+function getRequestIp(req: Request) {
+  const forwardedFor = req.headers.get("x-forwarded-for")
+  const realIp = req.headers.get("x-real-ip")
+  const cfIp = req.headers.get("cf-connecting-ip")
+
+  return normalizeIp(
+    forwardedFor || realIp || cfIp || null
+  )
+}
+
+function toPrismaJsonObject(
+  value: Record<string, unknown>
+): Prisma.InputJsonObject {
+  return JSON.parse(
+    JSON.stringify(value)
+  ) as Prisma.InputJsonObject
+}
+
+export async function GET() {
+  try {
+    const currentUser = await getUserFromRequest()
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Não autenticado" },
+        { status: 401 }
+      )
+    }
+
+    const permissions = getPermissions(currentUser)
+
+    if (!permissions.includes("SUPPLIER_VIEW")) {
+      return NextResponse.json(
+        {
+          error:
+            "Sem permissão para visualizar fornecedores",
+        },
+        { status: 403 }
+      )
+    }
+
+    const suppliers = await prisma.supplier.findMany({
+      include: {
+        country: true,
+        contacts: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    })
+
+    return NextResponse.json(
+      suppliers.map((supplier) => ({
+        id: supplier.id,
+        name: supplier.name,
+        supplierCodeSap: supplier.supplierCodeSap,
+        status: supplier.status,
+        address: supplier.address,
+        countryId: supplier.countryId,
+        riskScore: supplier.riskScore,
+        lastRiskCalculation:
+          supplier.lastRiskCalculation,
+        createdAt: supplier.createdAt,
+
+        country: {
+          id: supplier.country.id,
+          name: supplier.country.name,
+          isoCode: supplier.country.isoCode,
+        },
+
+        contacts: supplier.contacts.map((contact) => ({
+          id: contact.id,
+          name: contact.name,
+          email: contact.email,
+          phone: contact.phone,
+          position: contact.position,
+          createdAt: contact.createdAt,
+        })),
+      }))
+    )
+  } catch (error) {
+    console.error(error)
+
+    return NextResponse.json(
+      { error: "Erro ao buscar fornecedores" },
+      { status: 500 }
+    )
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    // 🔐 RBAC
-    const user = await requirePermission(
-      'SUPPLIER_CREATE'
-    )
+    const currentUser = await getUserFromRequest()
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Não autenticado" },
+        { status: 401 }
+      )
+    }
+
+    const permissions = getPermissions(currentUser)
+
+    if (!permissions.includes("SUPPLIER_CREATE")) {
+      return NextResponse.json(
+        {
+          error:
+            "Sem permissão para criar fornecedor",
+        },
+        { status: 403 }
+      )
+    }
 
     const body = await req.json()
 
     const {
       name,
       supplierCodeSap,
-      address,
       countryId,
+      address,
       contacts,
     } = body
 
-    // =========================
-    // VALIDATIONS
-    // =========================
+    const normalizedName =
+      typeof name === "string" ? name.trim() : ""
 
-    if (!name) {
+    const normalizedSupplierCodeSap =
+      typeof supplierCodeSap === "string" &&
+      supplierCodeSap.trim()
+        ? supplierCodeSap.trim()
+        : null
+
+    const normalizedAddress =
+      typeof address === "string" && address.trim()
+        ? address.trim()
+        : null
+
+    if (!normalizedName || !countryId) {
       return NextResponse.json(
         {
-          error: 'Nome obrigatório'
+          error:
+            "Nome e país do fornecedor são obrigatórios",
         },
-        {
-          status: 400
-        }
+        { status: 400 }
       )
     }
 
-    if (!countryId) {
-      return NextResponse.json(
-        {
-          error: 'País obrigatório'
-        },
-        {
-          status: 400
-        }
-      )
-    }
-
-    // =========================
-    // COUNTRY EXISTS
-    // =========================
-
-    const country =
-      await prisma.country.findUnique({
-        where: {
-          id: countryId
-        }
-      })
+    const country = await prisma.country.findUnique({
+      where: {
+        id: countryId,
+      },
+      select: {
+        id: true,
+        name: true,
+        isoCode: true,
+      },
+    })
 
     if (!country) {
       return NextResponse.json(
         {
-          error: 'País não encontrado'
+          error: "País informado não foi encontrado",
         },
-        {
-          status: 404
-        }
+        { status: 404 }
       )
     }
 
-    // =========================
-    // SAP CODE VALIDATION
-    // =========================
+    const contactsArray = Array.isArray(contacts)
+      ? contacts
+      : []
 
-    if (supplierCodeSap) {
-      const supplierAlreadyExists =
-        await prisma.supplier.findUnique({
-          where: {
-            supplierCodeSap
-          }
-        })
-
-      if (supplierAlreadyExists) {
-        return NextResponse.json(
-          {
-            error:
-              'Já existe um fornecedor com este código SAP'
-          },
-          {
-            status: 409
-          }
+    const normalizedContacts = contactsArray
+      .filter((contact: any) => {
+        return (
+          contact?.name?.trim() ||
+          contact?.email?.trim() ||
+          contact?.phone?.trim() ||
+          contact?.position?.trim()
         )
-      }
+      })
+      .map((contact: any) => ({
+        name:
+          typeof contact.name === "string"
+            ? contact.name.trim()
+            : "",
+        email:
+          typeof contact.email === "string" &&
+          contact.email.trim()
+            ? contact.email.trim()
+            : null,
+        phone:
+          typeof contact.phone === "string" &&
+          contact.phone.trim()
+            ? contact.phone.trim()
+            : null,
+        position:
+          typeof contact.position === "string" &&
+          contact.position.trim()
+            ? contact.position.trim()
+            : null,
+      }))
+
+    const invalidContact = normalizedContacts.find(
+      (contact) => !contact.name
+    )
+
+    if (invalidContact) {
+      return NextResponse.json(
+        {
+          error:
+            "Todo contato preenchido precisa ter pelo menos o nome",
+        },
+        { status: 400 }
+      )
     }
 
-    // =========================
-    // CREATE SUPPLIER
-    // =========================
+    const ipAddress = getRequestIp(req)
+    const userAgent = req.headers.get("user-agent")
 
-    const supplier =
-      await prisma.supplier.create({
-        data: {
-          name,
-          supplierCodeSap,
-          address,
-          countryId,
+    const supplier = await prisma.$transaction(
+      async (tx) => {
+        const createdSupplier =
+          await tx.supplier.create({
+            data: {
+              name: normalizedName,
+              supplierCodeSap:
+                normalizedSupplierCodeSap,
+              countryId,
+              address: normalizedAddress,
 
-          contacts: contacts?.length
-            ? {
-                create: contacts.map(
-                  (contact: any) => ({
+              contacts: {
+                create: normalizedContacts.map(
+                  (contact) => ({
                     name: contact.name,
                     email: contact.email,
                     phone: contact.phone,
-                    position:
-                      contact.position,
+                    position: contact.position,
                   })
-                )
-              }
-            : undefined,
-        },
+                ),
+              },
+            },
 
-        include: {
-          country: true,
-          contacts: true,
-        }
-      })
+            include: {
+              country: true,
+              contacts: true,
+            },
+          })
 
-    // =========================
-    // AUDIT
-    // =========================
+        const auditNewValue =
+          toPrismaJsonObject({
+            id: createdSupplier.id,
+            name: createdSupplier.name,
+            supplierCodeSap:
+              createdSupplier.supplierCodeSap,
+            status: createdSupplier.status,
+            address: createdSupplier.address,
+            countryId: createdSupplier.countryId,
 
-    await prisma.auditLog.create({
-      data: {
-        entityType: 'SUPPLIER',
-        entityId: supplier.id,
-        action: 'CREATE',
-        changedBy: user.id,
+            country: {
+              id: createdSupplier.country.id,
+              name: createdSupplier.country.name,
+              isoCode: createdSupplier.country.isoCode,
+            },
 
-        newValue: supplier as any,
-      }
-    })
+            contacts: createdSupplier.contacts.map(
+              (contact) => ({
+                id: contact.id,
+                name: contact.name,
+                email: contact.email,
+                phone: contact.phone,
+                position: contact.position,
+              })
+            ),
 
-    return NextResponse.json(
-      supplier,
-      {
-        status: 201
+            createdByUser: {
+              id: currentUser.id,
+            },
+
+            ...(userAgent
+              ? {
+                  userAgent,
+                }
+              : {}),
+          })
+
+        await tx.auditLog.create({
+          data: {
+            entityType: "Supplier",
+            entityId: createdSupplier.id,
+            action: "SUPPLIER_CREATE",
+            newValue: auditNewValue,
+            changedBy: currentUser.id,
+            ipAddress,
+          },
+        })
+
+        return createdSupplier
       }
     )
 
+    return NextResponse.json({
+      id: supplier.id,
+      name: supplier.name,
+      supplierCodeSap: supplier.supplierCodeSap,
+      status: supplier.status,
+      address: supplier.address,
+      countryId: supplier.countryId,
+      riskScore: supplier.riskScore,
+      lastRiskCalculation:
+        supplier.lastRiskCalculation,
+      createdAt: supplier.createdAt,
+
+      country: {
+        id: supplier.country.id,
+        name: supplier.country.name,
+        isoCode: supplier.country.isoCode,
+      },
+
+      contacts: supplier.contacts.map((contact) => ({
+        id: contact.id,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        position: contact.position,
+        createdAt: contact.createdAt,
+      })),
+    })
   } catch (error: any) {
+    if (error.code === "P2002") {
+      return NextResponse.json(
+        {
+          error:
+            "Já existe um fornecedor com este código SAP",
+        },
+        { status: 409 }
+      )
+    }
+
+    if (error.code === "P2003") {
+      return NextResponse.json(
+        {
+          error:
+            "Dados relacionados inválidos. Verifique o país informado.",
+        },
+        { status: 400 }
+      )
+    }
+
     console.error(error)
 
     return NextResponse.json(
-      {
-        error:
-          error.message ||
-          'Erro interno'
-      },
-      {
-        status: 500
-      }
-    )
-  }
-}
-
-export async function GET(req: Request) {
-  try {
-    await requirePermission(
-      'SUPPLIER_VIEW'
-    )
-
-    const { searchParams } =
-      new URL(req.url)
-
-    const search =
-      searchParams.get('search')
-
-    const status =
-      searchParams.get('status')
-
-    const suppliers =
-      await prisma.supplier.findMany({
-        where: {
-          ...(search && {
-            OR: [
-              {
-                name: {
-                  contains: search,
-                  mode: 'insensitive'
-                }
-              },
-
-              {
-                supplierCodeSap: {
-                  contains: search,
-                  mode: 'insensitive'
-                }
-              }
-            ]
-          }),
-
-          ...(status && {
-            status: status as any
-          })
-        },
-
-        include: {
-          country: true,
-          contacts: true
-        },
-
-        orderBy: {
-          createdAt: 'desc'
-        }
-      })
-
-    return NextResponse.json(
-      suppliers
-    )
-
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        error:
-          error.message ||
-          'Erro interno'
-      },
-      {
-        status: 500
-      }
+      { error: "Erro ao criar fornecedor" },
+      { status: 500 }
     )
   }
 }

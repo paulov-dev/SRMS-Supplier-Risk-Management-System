@@ -1,24 +1,7 @@
 "use client"
 
-import * as React from "react"
-
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 
 import {
   Table,
@@ -30,6 +13,11 @@ import {
 } from "@/components/ui/table"
 
 import {
+  Card,
+  CardContent,
+} from "@/components/ui/card"
+
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -38,417 +26,305 @@ import {
 } from "@/components/ui/select"
 
 import { Input } from "@/components/ui/input"
-
 import { Button } from "@/components/ui/button"
-
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconDotsVertical,
-  IconPlus,
-  IconSearch,
-} from "@tabler/icons-react"
-
 import { Badge } from "@/components/ui/badge"
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 
-import { useAuth } from "@/contexts/AuthContext"
+type Supplier = {
+  id: string
+  name: string
+  supplierCodeSap?: string
+  status:
+    | "ACTIVE"
+    | "UNDER_MONITORING"
+    | "AT_RISK"
+    | "BLOCKED"
+    | "INACTIVE"
+  riskScore?: number | null
+  country: {
+    id: string
+    name: string
+  }
+}
+
+type Country = {
+  id: string
+  name: string
+}
+
+interface Props {
+  data: Supplier[]
+  countries: Country[]
+  onReload: () => void
+}
+
+const PAGE_SIZE = 10
 
 export function SuppliersTable({
   data,
-  onReload,
-}: {
-  data: any[]
-  onReload: () => void
-}) {
+  countries,
+}: Props) {
   const router = useRouter()
 
-  const { hasPermission } = useAuth()
+  const [search, setSearch] = useState("")
+  const [status, setStatus] = useState("all")
+  const [country, setCountry] = useState("all")
 
-  const [countries, setCountries] =
-    React.useState<any[]>([])
+  const [page, setPage] = useState(1)
 
-  const [globalFilter, setGlobalFilter] =
-    React.useState("")
-
-  const [statusFilter, setStatusFilter] =
-    React.useState("ALL")
-
-  const [countryFilter, setCountryFilter] =
-    React.useState("ALL")
-
-  const [supplierToDelete, setSupplierToDelete] =
-    React.useState<any | null>(null)
-
-  React.useEffect(() => {
-    async function loadCountries() {
-      const res = await fetch("/api/countries")
-
-      const data = await res.json()
-
-      setCountries(data)
-    }
-
-    loadCountries()
-  }, [])
-
-  const filteredData = React.useMemo(() => {
+  const filteredData = useMemo(() => {
     return data.filter((supplier) => {
-      const matchesSearch =
+      const matchesName =
         supplier.name
           .toLowerCase()
-          .includes(globalFilter.toLowerCase()) ||
-        supplier.supplierCodeSap
-          ?.toLowerCase()
-          .includes(globalFilter.toLowerCase())
+          .includes(search.toLowerCase())
 
       const matchesStatus =
-        statusFilter === "ALL"
+        status === "all"
           ? true
-          : supplier.status === statusFilter
+          : supplier.status === status
 
       const matchesCountry =
-        countryFilter === "ALL"
+        country === "all"
           ? true
-          : supplier.country?.isoCode ===
-            countryFilter
+          : supplier.country.id === country
 
       return (
-        matchesSearch &&
+        matchesName &&
         matchesStatus &&
         matchesCountry
       )
     })
-  }, [
-    data,
-    globalFilter,
-    statusFilter,
-    countryFilter,
-  ])
+  }, [data, search, status, country])
 
-  async function handleDelete(id: string) {
-    await fetch(`/api/suppliers/${id}`, {
-      method: "DELETE",
-    })
+  const totalPages = Math.ceil(
+    filteredData.length / PAGE_SIZE
+  )
 
-    setSupplierToDelete(null)
+  const paginatedData = filteredData.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  )
 
-    onReload()
+  function getStatusBadge(status: string) {
+    switch (status) {
+      case "ACTIVE":
+        return (
+          <Badge variant="default">
+            Ativo
+          </Badge>
+        )
+
+      case "UNDER_MONITORING":
+        return (
+          <Badge variant="secondary">
+            Em Monitoramento
+          </Badge>
+        )
+
+      case "AT_RISK":
+        return (
+          <Badge variant="destructive">
+            RISK
+          </Badge>
+        )
+
+      case "BLOCKED":
+        return (
+          <Badge variant="destructive">
+            Bloqueado
+          </Badge>
+        )
+
+      case "INACTIVE":
+        return (
+          <Badge variant="outline">
+            Inativo
+          </Badge>
+        )
+
+      default:
+        return <Badge>{status}</Badge>
+    }
   }
 
-  const columns = [
-    {
-      accessorKey: "name",
-      header: "Supplier",
-    },
-    {
-      accessorKey: "supplierCodeSap",
-      header: "SAP Code",
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }: any) => (
-        <Badge variant="outline">
-          {row.original.status}
-        </Badge>
-      ),
-    },
-    {
-      accessorKey: "country",
-      header: "Country",
-      cell: ({ row }: any) =>
-        row.original.country?.isoCode,
-    },
-    {
-      accessorKey: "riskScore",
-      header: "Risk",
-    },
-    {
-      id: "actions",
-      cell: ({ row }: any) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-            >
-              <IconDotsVertical size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() =>
-                router.push(
-                  `/suppliers/${row.original.id}`
-                )
-              }
-            >
-              Edit
-            </DropdownMenuItem>
-
-            {hasPermission(
-              "SUPPLIER_MANAGE"
-            ) && (
-              <DropdownMenuItem
-                className="text-red-500"
-                onClick={() =>
-                  setSupplierToDelete(
-                    row.original
-                  )
-                }
-              >
-                Inactivate
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
-  ]
-
-  const table = useReactTable({
-    data: filteredData,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel:
-      getPaginationRowModel(),
-    getFilteredRowModel:
-      getFilteredRowModel(),
-    getSortedRowModel:
-      getSortedRowModel(),
-  })
-
   return (
-    <div className="space-y-4">
-
-      <div className="rounded-xl border p-4 space-y-4">
-
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">
-            Filters
-          </h2>
-
-          <Button>
-            <IconPlus size={16} />
-            New Supplier
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-
-          <div className="relative">
-            <IconSearch
-              size={16}
-              className="absolute left-3 top-3 text-muted-foreground"
-            />
-
+    <div className="space-y-6">
+      {/* FILTERS */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid gap-4 md:grid-cols-3">
             <Input
               placeholder="Search supplier..."
-              className="pl-9"
-              value={globalFilter}
+              value={search}
               onChange={(e) =>
-                setGlobalFilter(
-                  e.target.value
-                )
+                setSearch(e.target.value)
               }
             />
-          </div>
 
-          <Select
-            value={statusFilter}
-            onValueChange={setStatusFilter}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="ALL">
-                All Status
-              </SelectItem>
-
-              <SelectItem value="ACTIVE">
-                Active
-              </SelectItem>
-
-              <SelectItem value="UNDER_MONITORING">
-                Under Monitoring
-              </SelectItem>
-
-              <SelectItem value="AT_RISK">
-                At Risk
-              </SelectItem>
-
-              <SelectItem value="BLOCKED">
-                Blocked
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={countryFilter}
-            onValueChange={setCountryFilter}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Country" />
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="ALL">
-                All Countries
-              </SelectItem>
-
-              {countries.map((country) => (
-                <SelectItem
-                  key={country.id}
-                  value={country.isoCode}
-                >
-                  {country.name}
+            <Select
+              value={status}
+              onValueChange={setStatus}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              
+              <SelectContent>
+                <SelectItem value="all">
+                  Todos
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
 
-          <Input placeholder="Risk score >=" />
-        </div>
-      </div>
+                <SelectItem value="ACTIVE">
+                  Ativo
+                </SelectItem>
 
-      <div className="rounded-xl border overflow-hidden">
+                <SelectItem value="UNDER_MONITORING">
+                  Em monitoramento
+                </SelectItem>
+
+                <SelectItem value="AT_RISK">
+                  Risk
+                </SelectItem>
+
+                <SelectItem value="BLOCKED">
+                  Bloqueado
+                </SelectItem>
+
+                <SelectItem value="INACTIVE">
+                  Inativo
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={country}
+              onValueChange={setCountry}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Country" />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="all">
+                  Todos os Países
+                </SelectItem>
+
+                {countries.map((country) => (
+                  <SelectItem
+                    key={country.id}
+                    value={country.id}
+                  >
+                    {country.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* TABLE */}
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
-            {table
-              .getHeaderGroups()
-              .map((hg) => (
-                <TableRow key={hg.id}>
-                  {hg.headers.map(
-                    (header) => (
-                      <TableHead
-                        key={header.id}
-                      >
-                        {flexRender(
-                          header.column
-                            .columnDef
-                            .header,
-                          header.getContext()
-                        )}
-                      </TableHead>
-                    )
-                  )}
-                </TableRow>
-              ))}
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Country</TableHead>
+              <TableHead>Risk Score</TableHead>
+              <TableHead className="text-right">
+                Actions
+              </TableHead>
+            </TableRow>
           </TableHeader>
 
           <TableBody>
-            {table
-              .getRowModel()
-              .rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row
-                    .getVisibleCells()
-                    .map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                      >
-                        {flexRender(
-                          cell.column
-                            .columnDef
-                            .cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
-                    ))}
+            {paginatedData.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="h-32 text-center"
+                >
+                  No suppliers found
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginatedData.map((supplier) => (
+                <TableRow key={supplier.id}>
+                  <TableCell className="font-medium">
+                    {supplier.name}
+                  </TableCell>
+
+                  <TableCell>
+                    {getStatusBadge(
+                      supplier.status
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    {supplier.country.name}
+                  </TableCell>
+
+                  <TableCell>
+                    {supplier.riskScore ?? "-"}
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        router.push(
+                          `/suppliers/${supplier.id}`
+                        )
+                      }
+                    >
+                      Visualizar
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              ))}
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
 
-      <div className="flex items-center justify-between">
-
-        <div className="text-sm text-muted-foreground">
-          {
-            table.getFilteredRowModel()
-              .rows.length
-          }{" "}
-          suppliers
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              table.previousPage()
-            }
-            disabled={
-              !table.getCanPreviousPage()
-            }
-          >
-            <IconChevronLeft size={16} />
-          </Button>
-
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              table.nextPage()
-            }
-            disabled={!table.getCanNextPage()}
-          >
-            <IconChevronRight size={16} />
-          </Button>
-        </div>
-      </div>
-
-      <AlertDialog
-        open={!!supplierToDelete}
-        onOpenChange={(open: boolean) => {
-          if (!open) {
-            setSupplierToDelete(null)
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Inactivate supplier?
-            </AlertDialogTitle>
-
-            <AlertDialogDescription>
-              This action will set the
-              supplier as inactive.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <AlertDialogFooter>
-            <AlertDialogCancel>
-              Cancel
-            </AlertDialogCancel>
-
-            <AlertDialogAction
+      {/* PAGINATION */}
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
               onClick={() =>
-                handleDelete(
-                  supplierToDelete.id
-                )
+                page > 1 &&
+                setPage(page - 1)
               }
-            >
-              Confirm
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            />
+          </PaginationItem>
+
+          <PaginationItem>
+            <span className="text-sm px-4">
+              Page {page} of {totalPages || 1}
+            </span>
+          </PaginationItem>
+
+          <PaginationItem>
+            <PaginationNext
+              onClick={() =>
+                page < totalPages &&
+                setPage(page + 1)
+              }
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
     </div>
   )
 }

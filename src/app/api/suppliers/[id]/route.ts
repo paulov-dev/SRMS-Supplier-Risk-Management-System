@@ -1,257 +1,332 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from "next/server"
 
-import { prisma } from '@/app/api/lib/prisma'
+import { prisma } from "@/app/api/lib/prisma"
+import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 
-import { requirePermission } from '@/app/api/lib/requirePermission'
-
-type Params = {
-  params: Promise<{
-    id: string
-  }>
+function getPermissions(user: any) {
+  return [
+    ...new Set(
+      user.roles.flatMap((ur: any) =>
+        ur.role.permissions.map(
+          (rp: any) => rp.permission.name
+        )
+      )
+    ),
+  ]
 }
 
 export async function GET(
-  req: Request,
-  { params }: Params
-) {
-  try {
-    await requirePermission(
-      'SUPPLIER_VIEW'
-    )
-
-    const { id } = await params
-
-    const supplier =
-      await prisma.supplier.findUnique({
-        where: {
-          id
-        },
-
-        include: {
-          country: true,
-          contacts: true,
-          riskEvents: true,
-          riskScores: true
-        }
-      })
-
-    if (!supplier) {
-      return NextResponse.json(
-        {
-          error:
-            'Fornecedor não encontrado'
-        },
-        {
-          status: 404
-        }
-      )
-    }
-
-    return NextResponse.json(
-      supplier
-    )
-
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        error:
-          error.message
-      },
-      {
-        status: 500
-      }
-    )
+  _req: Request,
+  {
+    params,
+  }: {
+    params: Promise<{
+      id: string
+    }>
   }
-}
-
-export async function PATCH(
-  req: Request,
-  { params }: Params
 ) {
   try {
-    const user =
-      await requirePermission(
-        'SUPPLIER_UPDATE'
-      )
+    const currentUser = await getUserFromRequest()
 
-    const { id } = await params
-
-    const body = await req.json()
-
-    const {
-      name,
-      supplierCodeSap,
-      address,
-      status,
-      countryId
-    } = body
-
-    const supplier =
-      await prisma.supplier.findUnique({
-        where: {
-          id
-        }
-      })
-
-    if (!supplier) {
+    if (!currentUser) {
       return NextResponse.json(
-        {
-          error:
-            'Fornecedor não encontrado'
-        },
-        {
-          status: 404
-        }
+        { error: "Não autenticado" },
+        { status: 401 }
       )
     }
 
-    // SAP UNIQUE
-    if (
-      supplierCodeSap &&
-      supplierCodeSap !==
-        supplier.supplierCodeSap
-    ) {
-      const existingSupplier =
-        await prisma.supplier.findUnique({
-          where: {
-            supplierCodeSap
-          }
-        })
+    const permissions = getPermissions(currentUser)
 
-      if (existingSupplier) {
-        return NextResponse.json(
-          {
-            error:
-              'Código SAP já utilizado'
+    if (!permissions.includes("SUPPLIER_VIEW")) {
+      return NextResponse.json(
+        {
+          error:
+            "Sem permissão para visualizar fornecedores",
+        },
+        { status: 403 }
+      )
+    }
+
+    const { id } = await params
+
+    const supplier = await prisma.supplier.findUnique({
+      where: {
+        id,
+      },
+
+      include: {
+        country: true,
+
+        contacts: {
+          orderBy: {
+            name: "asc",
           },
-          {
-            status: 409
-          }
-        )
-      }
-    }
-
-    const updatedSupplier =
-      await prisma.supplier.update({
-        where: {
-          id
         },
 
-        data: {
-          name,
-          supplierCodeSap,
-          address,
-          status,
-          countryId
+        riskEvents: {
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+
+            closedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+
+            parts: {
+              include: {
+                partNumber: true,
+                assignedTo: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
+            },
+
+            actionPlans: {
+              include: {
+                createdBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                assignedTo: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+              orderBy: {
+                dueDate: "asc",
+              },
+            },
+
+            logistics: {
+              include: {
+                requester: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                reviewer: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+              orderBy: {
+                requestedAt: "desc",
+              },
+            },
+          },
+
+          orderBy: {
+            createdAt: "desc",
+          },
         },
-
-        include: {
-          country: true,
-          contacts: true
-        }
-      })
-
-    // AUDIT
-    await prisma.auditLog.create({
-      data: {
-        entityType: 'SUPPLIER',
-        entityId: id,
-        action: 'UPDATE',
-        changedBy: user.id,
-
-        oldValue: supplier as any,
-        newValue:
-          updatedSupplier as any
-      }
-    })
-
-    return NextResponse.json(
-      updatedSupplier
-    )
-
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        error:
-          error.message
       },
-      {
-        status: 500
-      }
-    )
-  }
-}
-
-export async function DELETE(
-  req: Request,
-  { params }: Params
-) {
-  try {
-    const user =
-      await requirePermission(
-        'SUPPLIER_UPDATE'
-      )
-
-    const { id } = await params
-
-    const supplier =
-      await prisma.supplier.findUnique({
-        where: {
-          id
-        }
-      })
+    })
 
     if (!supplier) {
       return NextResponse.json(
-        {
-          error:
-            'Fornecedor não encontrado'
-        },
-        {
-          status: 404
-        }
+        { error: "Fornecedor não encontrado" },
+        { status: 404 }
       )
     }
-
-    const deletedSupplier =
-      await prisma.supplier.update({
-        where: {
-          id
-        },
-
-        data: {
-          status: 'INACTIVE'
-        }
-      })
-
-    // AUDIT
-    await prisma.auditLog.create({
-      data: {
-        entityType: 'SUPPLIER',
-        entityId: id,
-        action: 'INACTIVATE',
-        changedBy: user.id,
-
-        oldValue: supplier as any,
-        newValue:
-          deletedSupplier as any
-      }
-    })
 
     return NextResponse.json({
-      message:
-        'Fornecedor inativado com sucesso'
-    })
+      id: supplier.id,
+      name: supplier.name,
+      supplierCodeSap: supplier.supplierCodeSap,
+      status: supplier.status,
+      address: supplier.address,
+      countryId: supplier.countryId,
+      riskScore: supplier.riskScore,
+      lastRiskCalculation: supplier.lastRiskCalculation,
+      createdAt: supplier.createdAt,
 
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        error:
-          error.message
+      country: {
+        id: supplier.country.id,
+        name: supplier.country.name,
+        isoCode: supplier.country.isoCode,
       },
-      {
-        status: 500
-      }
+
+      contacts: supplier.contacts.map((contact) => ({
+        id: contact.id,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        position: contact.position,
+        createdAt: contact.createdAt,
+      })),
+
+      riskEvents: supplier.riskEvents.map((risk) => ({
+        id: risk.id,
+        code: risk.code,
+        sequenceNumber: risk.sequenceNumber,
+        codePrefix: risk.codePrefix,
+
+        title: risk.title || risk.code,
+        description: risk.description,
+        openingReason: risk.openingReason,
+
+        workflowStatus: risk.workflowStatus,
+        riskLevel: risk.riskLevel,
+
+        createdWeek: risk.createdWeek,
+        createdYear: risk.createdYear,
+
+        createdAt: risk.createdAt,
+        updatedAt: risk.updatedAt,
+        closedAt: risk.closedAt,
+
+        createdBy: risk.createdBy
+          ? {
+              id: risk.createdBy.id,
+              name: risk.createdBy.name,
+              email: risk.createdBy.email,
+            }
+          : null,
+
+        assignedTo: risk.assignedTo
+          ? {
+              id: risk.assignedTo.id,
+              name: risk.assignedTo.name,
+              email: risk.assignedTo.email,
+            }
+          : null,
+
+        closedBy: risk.closedBy
+          ? {
+              id: risk.closedBy.id,
+              name: risk.closedBy.name,
+              email: risk.closedBy.email,
+            }
+          : null,
+
+        /**
+         * Mantido para compatibilidade com telas antigas
+         * que esperavam risk.status.name.
+         */
+        status: {
+          id: risk.workflowStatus,
+          name: risk.workflowStatus,
+        },
+
+        parts: risk.parts.map((part) => ({
+          id: part.id,
+          status: part.status,
+          logisticsStatus: part.logisticsStatus,
+          createdAt: part.createdAt,
+          updatedAt: part.updatedAt,
+
+          partNumber: {
+            id: part.partNumber.id,
+            partNumber: part.partNumber.partNumber,
+            description: part.partNumber.description,
+            vehicleProgram:
+              part.partNumber.vehicleProgram,
+          },
+
+          assignedTo: part.assignedTo
+            ? {
+                id: part.assignedTo.id,
+                name: part.assignedTo.name,
+                email: part.assignedTo.email,
+              }
+            : null,
+        })),
+
+        actionPlans: risk.actionPlans.map((actionPlan) => {
+          const isOverdue =
+            !actionPlan.isCompleted &&
+            new Date(actionPlan.dueDate) <
+              new Date()
+
+          return {
+            id: actionPlan.id,
+            description: actionPlan.description,
+            dueDate: actionPlan.dueDate,
+            isCompleted: actionPlan.isCompleted,
+            completedAt: actionPlan.completedAt,
+            isOverdue,
+            createdAt: actionPlan.createdAt,
+            updatedAt: actionPlan.updatedAt,
+
+            createdBy: {
+              id: actionPlan.createdBy.id,
+              name: actionPlan.createdBy.name,
+              email: actionPlan.createdBy.email,
+            },
+
+            assignedTo: {
+              id: actionPlan.assignedTo.id,
+              name: actionPlan.assignedTo.name,
+              email: actionPlan.assignedTo.email,
+            },
+          }
+        }),
+
+        logistics: risk.logistics.map((request) => ({
+          id: request.id,
+          status: request.status,
+          requestedAt: request.requestedAt,
+          reviewedAt: request.reviewedAt,
+          notes: request.notes,
+          rejectionReason: request.rejectionReason,
+
+          requester: {
+            id: request.requester.id,
+            name: request.requester.name,
+            email: request.requester.email,
+          },
+
+          reviewer: request.reviewer
+            ? {
+                id: request.reviewer.id,
+                name: request.reviewer.name,
+                email: request.reviewer.email,
+              }
+            : null,
+        })),
+      })),
+    })
+  } catch (error) {
+    console.error(error)
+
+    return NextResponse.json(
+      { error: "Erro ao buscar fornecedor" },
+      { status: 500 }
     )
   }
 }

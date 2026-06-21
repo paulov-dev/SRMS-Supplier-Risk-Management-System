@@ -2,21 +2,20 @@
 
 import * as React from "react"
 import {
-  IconCamera,
-  IconChartBar,
   IconDashboard,
   IconDatabase,
-  IconFileAi,
-  IconFileDescription,
   IconFileWord,
   IconFolder,
   IconHelp,
+  IconHistory,
   IconInnerShadowTop,
   IconListDetails,
   IconReport,
   IconSearch,
   IconSettings,
+  IconShieldLock,
   IconUsers,
+  IconUserHexagon,
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/contexts/AuthContext"
@@ -36,14 +35,57 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
+type PermissionRule = string | string[]
+
+type NavItem = {
+  title: string
+  url: string
+  icon?: React.ComponentType<{
+    className?: string
+  }>
+  permission?: PermissionRule
+  items?: NavItem[]
+}
+
 export function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
 
-  const hasPermission = (permission?: string) => {
+  const hasPermission = (permission?: PermissionRule) => {
     if (!permission) return true
+
+    if (Array.isArray(permission)) {
+      return permission.some((item) =>
+        user?.permissions?.includes(item)
+      )
+    }
+
     return user?.permissions?.includes(permission)
+  }
+
+  const filterNavItems = (items: NavItem[]): NavItem[] => {
+    return items
+      .map((item) => {
+        const filteredChildren = item.items
+          ? filterNavItems(item.items)
+          : undefined
+
+        const canSeeItem = hasPermission(item.permission)
+
+        const hasVisibleChildren =
+          filteredChildren && filteredChildren.length > 0
+
+        if (!canSeeItem && !hasVisibleChildren) {
+          return null
+        }
+
+        return {
+          ...item,
+          items: filteredChildren,
+        }
+      })
+      .filter(Boolean) as NavItem[]
   }
 
   const data = {
@@ -73,67 +115,32 @@ export function AppSidebar({
         permission: "USER_MANAGE",
       },
       {
-        title: "Analytics",
-        url: "#",
-        icon: IconChartBar,
-        permission: "USER_MANAGE",
-      },
-      {
-        title: "Projects",
-        url: "#",
+        title: "Fornecedores",
+        url: "/suppliers",
         icon: IconFolder,
-        permission: "USER_MANAGE",
+        permission: "SUPPLIER_VIEW",
       },
-    ],
-
-    navClouds: [
       {
-        title: "Capture",
-        icon: IconCamera,
-        isActive: true,
+        title: "Admin",
         url: "#",
+        icon: IconUserHexagon,
+        permission: ["MANAGE_USERS", "AUDIT_LOG_VIEW"],
         items: [
           {
-            title: "Active Proposals",
-            url: "#",
+            title: "Roles",
+            url: "/admin/roles",
+            icon: IconShieldLock,
+            permission: "USER_MANAGE",
           },
           {
-            title: "Archived",
-            url: "#",
+            title: "Audit Logs",
+            url: "/admin/audit-logs",
+            icon: IconHistory,
+            permission: "AUDIT_LOG_VIEW",
           },
         ],
       },
-      {
-        title: "Proposal",
-        icon: IconFileDescription,
-        url: "#",
-        items: [
-          {
-            title: "Active Proposals",
-            url: "#",
-          },
-          {
-            title: "Archived",
-            url: "#",
-          },
-        ],
-      },
-      {
-        title: "Prompts",
-        icon: IconFileAi,
-        url: "#",
-        items: [
-          {
-            title: "Active Proposals",
-            url: "#",
-          },
-          {
-            title: "Archived",
-            url: "#",
-          },
-        ],
-      },
-    ],
+    ] satisfies NavItem[],
 
     navSecondary: [
       {
@@ -172,9 +179,7 @@ export function AppSidebar({
     ],
   }
 
-  const filteredNavMain = data.navMain.filter((item) =>
-    hasPermission(item.permission)
-  )
+  const filteredNavMain = filterNavItems(data.navMain)
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -185,8 +190,12 @@ export function AppSidebar({
               asChild
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
-              <a href="/dashboard" className="flex items-center gap-2">
+              <a
+                href="/dashboard"
+                className="flex items-center gap-2"
+              >
                 <IconInnerShadowTop className="size-5!" />
+
                 <span className="text-base font-semibold">
                   SRMS | Supplier Risk Management System
                 </span>
@@ -198,7 +207,9 @@ export function AppSidebar({
 
       <SidebarContent>
         <NavMain items={filteredNavMain} />
+
         <NavDocuments items={data.documents} />
+
         <NavSecondary
           items={data.navSecondary}
           className="mt-auto"

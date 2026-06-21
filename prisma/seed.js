@@ -24,7 +24,8 @@ async function main() {
     'COMMENT_CREATE',
     'COMMENT_VIEW',
     'DASHBOARD_VIEW',
-    'ANALYTICS_VIEW'
+    'ANALYTICS_VIEW',
+    'AUDIT_LOG_VIEW'
   ]
 
   await prisma.permission.createMany({
