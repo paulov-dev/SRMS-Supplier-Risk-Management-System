@@ -89,6 +89,10 @@ enum RiskActionPlanHistoryType {
   NOTE
 }
 
+//////////////////////
+// SEQUENCES
+//////////////////////
+
 model RiskSequence {
   key           String   @id
   currentNumber Int      @default(0)
@@ -209,6 +213,8 @@ model SupplierContact {
   createdAt  DateTime @default(now())
 
   supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
 }
 
 //////////////////////
@@ -228,6 +234,9 @@ model RiskEvent {
   openingReason RiskOpeningReason
 
   supplierId String
+
+  commodity       String?
+  functionalGroup String?
 
   workflowStatus RiskWorkflowStatus @default(OPEN)
   riskLevel      RiskLevel          @default(GREEN)
@@ -249,13 +258,13 @@ model RiskEvent {
   assignedTo User? @relation("AssignedTo", fields: [assignedToId], references: [id])
   closedBy   User? @relation("ClosedBy", fields: [closedById], references: [id])
 
-  actionPlanHistory RiskActionPlanHistory[]
   parts             RiskEventPart[]
   actionPlans       RiskActionPlan[]
   comments          Comment[]
   logistics         LogisticsRequest[]
   statusHistory     RiskStatusHistory[]
   partHistory       RiskEventPartHistory[]
+  actionPlanHistory RiskActionPlanHistory[]
 
   @@index([code])
   @@index([sequenceNumber])
@@ -264,7 +273,67 @@ model RiskEvent {
   @@index([assignedToId])
   @@index([workflowStatus])
   @@index([riskLevel])
+  @@index([commodity])
+  @@index([functionalGroup])
   @@index([createdWeek, createdYear])
+}
+
+model RiskEventPart {
+  id           String @id @default(uuid())
+  riskEventId  String
+  partNumberId String
+
+  status PartRiskStatus @default(GREEN)
+
+  logisticsStatus RiskPartLogisticsStatus @default(NOT_REQUESTED)
+
+  assignedToId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  riskEvent  RiskEvent  @relation(fields: [riskEventId], references: [id])
+  partNumber PartNumber @relation(fields: [partNumberId], references: [id])
+
+  assignedTo User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
+
+  history           RiskEventPartHistory[]
+  actionPlans       RiskActionPlan[]
+  actionPlanHistory RiskActionPlanHistory[]
+  assessment        RiskPartAssessment?
+
+  @@unique([riskEventId, partNumberId])
+  @@index([riskEventId])
+  @@index([partNumberId])
+  @@index([status])
+  @@index([logisticsStatus])
+}
+
+model RiskPartAssessment {
+  id              String @id @default(uuid())
+  riskEventPartId String @unique
+
+  isPartCanceled Boolean?
+  hasDemand      Boolean?
+  sourceNamed    Boolean?
+
+  actionPlanReceived       Boolean?
+  scheduleMeetsDevelopment Boolean?
+  technicalCommercialOk    Boolean?
+  productionRiskMitigated  Boolean?
+  eopManagementOk          Boolean?
+
+  deviationPfpFinished    Boolean?
+  onlyVdaPending          Boolean?
+  vdaApproved             Boolean?
+  modificationImplemented Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  riskEventPart RiskEventPart @relation(fields: [riskEventPartId], references: [id], onDelete: Cascade)
+
+  @@index([riskEventPartId])
 }
 
 model RiskActionPlan {
@@ -334,8 +403,7 @@ model RiskEventPartHistory {
   riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
   riskEvent     RiskEvent      @relation(fields: [riskEventId], references: [id])
   partNumber    PartNumber     @relation(fields: [partNumberId], references: [id])
-
-  changedBy User @relation("RiskPartHistoryChangedBy", fields: [changedById], references: [id])
+  changedBy     User           @relation("RiskPartHistoryChangedBy", fields: [changedById], references: [id])
 
   @@index([riskEventPartId])
   @@index([riskEventId])
@@ -374,15 +442,11 @@ model RiskActionPlanHistory {
   changedById String
   changedAt   DateTime @default(now())
 
-  actionPlan RiskActionPlan? @relation(fields: [actionPlanId], references: [id], onDelete: SetNull)
-
-  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
-
-  riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
-
-  partNumber PartNumber? @relation(fields: [partNumberId], references: [id], onDelete: SetNull)
-
-  changedBy User @relation("RiskActionPlanHistoryChangedBy", fields: [changedById], references: [id])
+  actionPlan    RiskActionPlan? @relation(fields: [actionPlanId], references: [id], onDelete: SetNull)
+  riskEvent     RiskEvent       @relation(fields: [riskEventId], references: [id])
+  riskEventPart RiskEventPart?  @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
+  partNumber    PartNumber?     @relation(fields: [partNumberId], references: [id], onDelete: SetNull)
+  changedBy     User            @relation("RiskActionPlanHistoryChangedBy", fields: [changedById], references: [id])
 
   @@index([actionPlanId])
   @@index([riskEventId])
@@ -410,36 +474,6 @@ model PartNumber {
   riskActionPlanHistories RiskActionPlanHistory[]
 
   @@index([partNumber])
-}
-
-model RiskEventPart {
-  id           String @id @default(uuid())
-  riskEventId  String
-  partNumberId String
-
-  status PartRiskStatus @default(GREEN)
-
-  logisticsStatus RiskPartLogisticsStatus @default(NOT_REQUESTED)
-
-  assignedToId String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  riskEvent  RiskEvent  @relation(fields: [riskEventId], references: [id])
-  partNumber PartNumber @relation(fields: [partNumberId], references: [id])
-
-  assignedTo User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
-
-  actionPlanHistory RiskActionPlanHistory[]
-  history           RiskEventPartHistory[]
-  actionPlans       RiskActionPlan[]
-
-  @@unique([riskEventId, partNumberId])
-  @@index([riskEventId])
-  @@index([partNumberId])
-  @@index([status])
-  @@index([logisticsStatus])
 }
 
 //////////////////////
@@ -509,6 +543,10 @@ model Comment {
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
   user      User      @relation(fields: [userId], references: [id])
+
+  @@index([riskEventId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model AuditLog {
@@ -559,6 +597,9 @@ model SupplierRiskScore {
   calculatedAt DateTime @default(now())
 
   supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@index([calculatedAt])
 }
 
 //////////////////////
