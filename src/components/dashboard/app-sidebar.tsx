@@ -107,7 +107,7 @@ export function AppSidebar({
         url: "/rms",
         icon: IconListDetails,
         permission: "RISK_VIEW",
-      },
+      },      
       {
         title: "Usuários",
         url: "/users",

@@ -71,6 +71,24 @@ enum Trend {
   STABLE
 }
 
+enum RiskPartHistoryType {
+  STATUS_CHANGE
+  RESPONSIBLE_CHANGE
+  DATA_CHANGE
+  LOGISTICS_CHANGE
+  MULTIPLE_CHANGE
+  NOTE
+}
+
+enum RiskActionPlanHistoryType {
+  ACTION_PLAN_CREATE
+  ACTION_PLAN_UPDATE
+  ACTION_PLAN_COMPLETE
+  ACTION_PLAN_REOPEN
+  ACTION_PLAN_DELETE
+  NOTE
+}
+
 model RiskSequence {
   key           String   @id
   currentNumber Int      @default(0)
@@ -90,8 +108,8 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
-  roles        UserRole[]
-  comments     Comment[]
+  roles    UserRole[]
+  comments Comment[]
 
   createdRisks  RiskEvent[] @relation("CreatedBy")
   assignedRisks RiskEvent[] @relation("AssignedTo")
@@ -100,30 +118,32 @@ model User {
   requestedLogistics LogisticsRequest[] @relation("LogisticsRequester")
   reviewedLogistics  LogisticsRequest[] @relation("LogisticsReviewer")
 
-  riskPartsAssigned RiskEventPart[] @relation("RiskPartAssignedTo")
+  riskPartsAssigned       RiskEventPart[]         @relation("RiskPartAssignedTo")
+  riskPartHistory         RiskEventPartHistory[]  @relation("RiskPartHistoryChangedBy")
+  riskActionPlanHistories RiskActionPlanHistory[] @relation("RiskActionPlanHistoryChangedBy")
 
   createdActionPlans  RiskActionPlan[] @relation("ActionPlanCreatedBy")
   assignedActionPlans RiskActionPlan[] @relation("ActionPlanAssignedTo")
 
   buffersCreated LogisticsBuffer[] @relation("BufferCreator")
 
-  auditLogs AuditLog[]
+  auditLogs     AuditLog[]
   statusChanges RiskStatusHistory[]
 }
 
 model Role {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id   String @id @default(uuid())
+  name String @unique
 
   users       UserRole[]
   permissions RolePermission[]
 }
 
 model Permission {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id   String @id @default(uuid())
+  name String @unique
 
-  roles       RolePermission[]
+  roles RolePermission[]
 }
 
 model UserRole {
@@ -163,20 +183,20 @@ model Country {
 //////////////////////
 
 model Supplier {
-  id                  String   @id @default(uuid())
+  id                  String         @id @default(uuid())
   name                String
-  supplierCodeSap     String? @unique
+  supplierCodeSap     String?        @unique
   status              SupplierStatus @default(ACTIVE)
   address             String?
   countryId           String
   riskScore           Int?
   lastRiskCalculation DateTime?
-  createdAt           DateTime @default(now())
+  createdAt           DateTime       @default(now())
 
-  country     Country             @relation(fields: [countryId], references: [id])
-  contacts    SupplierContact[]
-  riskEvents  RiskEvent[]
-  riskScores  SupplierRiskScore[]
+  country    Country             @relation(fields: [countryId], references: [id])
+  contacts   SupplierContact[]
+  riskEvents RiskEvent[]
+  riskScores SupplierRiskScore[]
 }
 
 model SupplierContact {
@@ -196,32 +216,32 @@ model SupplierContact {
 //////////////////////
 
 model RiskEvent {
-  id             String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  code           String   @unique
-  sequenceNumber Int      @unique
+  code           String         @unique
+  sequenceNumber Int            @unique
   codePrefix     RiskCodePrefix
 
-  title          String?
-  description    String?
+  title       String?
+  description String?
 
-  openingReason  RiskOpeningReason
+  openingReason RiskOpeningReason
 
-  supplierId     String
+  supplierId String
 
   workflowStatus RiskWorkflowStatus @default(OPEN)
   riskLevel      RiskLevel          @default(GREEN)
 
-  createdWeek    Int
-  createdYear    Int
+  createdWeek Int
+  createdYear Int
 
-  createdById    String
-  assignedToId   String?
-  closedById     String?
+  createdById  String
+  assignedToId String?
+  closedById   String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  closedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  closedAt  DateTime?
 
   supplier Supplier @relation(fields: [supplierId], references: [id])
 
@@ -229,11 +249,13 @@ model RiskEvent {
   assignedTo User? @relation("AssignedTo", fields: [assignedToId], references: [id])
   closedBy   User? @relation("ClosedBy", fields: [closedById], references: [id])
 
-  parts         RiskEventPart[]
-  actionPlans   RiskActionPlan[]
-  comments      Comment[]
-  logistics     LogisticsRequest[]
-  statusHistory RiskStatusHistory[]
+  actionPlanHistory RiskActionPlanHistory[]
+  parts             RiskEventPart[]
+  actionPlans       RiskActionPlan[]
+  comments          Comment[]
+  logistics         LogisticsRequest[]
+  statusHistory     RiskStatusHistory[]
+  partHistory       RiskEventPartHistory[]
 
   @@index([code])
   @@index([sequenceNumber])
@@ -246,8 +268,10 @@ model RiskEvent {
 }
 
 model RiskActionPlan {
-  id          String   @id @default(uuid())
+  id          String @id @default(uuid())
   riskEventId String
+
+  riskEventPartId String?
 
   description String
   dueDate     DateTime
@@ -263,14 +287,109 @@ model RiskActionPlan {
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
 
+  riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id])
+
   createdBy  User @relation("ActionPlanCreatedBy", fields: [createdById], references: [id])
   assignedTo User @relation("ActionPlanAssignedTo", fields: [assignedToId], references: [id])
 
+  history RiskActionPlanHistory[]
+
   @@index([riskEventId])
+  @@index([riskEventPartId])
   @@index([createdById])
   @@index([assignedToId])
   @@index([dueDate])
   @@index([isCompleted])
+}
+
+model RiskEventPartHistory {
+  id String @id @default(uuid())
+
+  riskEventPartId String?
+  riskEventId     String
+  partNumberId    String
+
+  changeType RiskPartHistoryType
+
+  oldStatus PartRiskStatus?
+  newStatus PartRiskStatus?
+
+  oldLogisticsStatus RiskPartLogisticsStatus?
+  newLogisticsStatus RiskPartLogisticsStatus?
+
+  oldAssignedToId String?
+  newAssignedToId String?
+
+  oldDescription String?
+  newDescription String?
+
+  oldVehicleProgram String?
+  newVehicleProgram String?
+
+  reason String
+
+  changedById String
+  changedAt   DateTime @default(now())
+
+  riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
+  riskEvent     RiskEvent      @relation(fields: [riskEventId], references: [id])
+  partNumber    PartNumber     @relation(fields: [partNumberId], references: [id])
+
+  changedBy User @relation("RiskPartHistoryChangedBy", fields: [changedById], references: [id])
+
+  @@index([riskEventPartId])
+  @@index([riskEventId])
+  @@index([partNumberId])
+  @@index([changedById])
+  @@index([changedAt])
+  @@index([riskEventId, changedAt])
+  @@index([partNumberId, changedAt])
+}
+
+model RiskActionPlanHistory {
+  id String @id @default(uuid())
+
+  actionPlanId String?
+  riskEventId  String
+
+  riskEventPartId String?
+  partNumberId    String?
+
+  changeType RiskActionPlanHistoryType
+
+  oldDescription String?
+  newDescription String?
+
+  oldDueDate DateTime?
+  newDueDate DateTime?
+
+  oldAssignedToId String?
+  newAssignedToId String?
+
+  oldCompleted Boolean?
+  newCompleted Boolean?
+
+  reason String?
+
+  changedById String
+  changedAt   DateTime @default(now())
+
+  actionPlan RiskActionPlan? @relation(fields: [actionPlanId], references: [id], onDelete: SetNull)
+
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+
+  riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
+
+  partNumber PartNumber? @relation(fields: [partNumberId], references: [id], onDelete: SetNull)
+
+  changedBy User @relation("RiskActionPlanHistoryChangedBy", fields: [changedById], references: [id])
+
+  @@index([actionPlanId])
+  @@index([riskEventId])
+  @@index([riskEventPartId])
+  @@index([partNumberId])
+  @@index([changedById])
+  @@index([changedAt])
 }
 
 //////////////////////
@@ -287,11 +406,14 @@ model PartNumber {
   riskParts RiskEventPart[]
   buffers   LogisticsBuffer[]
 
+  riskPartHistory         RiskEventPartHistory[]
+  riskActionPlanHistories RiskActionPlanHistory[]
+
   @@index([partNumber])
 }
 
 model RiskEventPart {
-  id           String   @id @default(uuid())
+  id           String @id @default(uuid())
   riskEventId  String
   partNumberId String
 
@@ -309,6 +431,10 @@ model RiskEventPart {
 
   assignedTo User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
 
+  actionPlanHistory RiskActionPlanHistory[]
+  history           RiskEventPartHistory[]
+  actionPlans       RiskActionPlan[]
+
   @@unique([riskEventId, partNumberId])
   @@index([riskEventId])
   @@index([partNumberId])
@@ -321,18 +447,18 @@ model RiskEventPart {
 //////////////////////
 
 model LogisticsRequest {
-  id          String          @id @default(uuid())
+  id          String @id @default(uuid())
   riskEventId String
 
   requestedBy String
   assignedTo  String?
 
-  status      LogisticsStatus @default(PENDING)
+  status LogisticsStatus @default(PENDING)
 
-  requestedAt DateTime @default(now())
+  requestedAt DateTime  @default(now())
   reviewedAt  DateTime?
 
-  notes       String?
+  notes           String?
   rejectionReason String?
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
@@ -350,15 +476,15 @@ model LogisticsRequest {
 }
 
 model LogisticsBuffer {
-  id                   String   @id @default(uuid())
-  logisticsRequestId   String
-  partNumberId         String
-  bufferQuantity       Int
-  coverageDays         Int
-  validUntil           DateTime?
-  notes                String?
-  createdBy            String
-  createdAt            DateTime @default(now())
+  id                 String    @id @default(uuid())
+  logisticsRequestId String
+  partNumberId       String
+  bufferQuantity     Int
+  coverageDays       Int
+  validUntil         DateTime?
+  notes              String?
+  createdBy          String
+  createdAt          DateTime  @default(now())
 
   logisticsRequest LogisticsRequest @relation(fields: [logisticsRequestId], references: [id])
   partNumber       PartNumber       @relation(fields: [partNumberId], references: [id])
