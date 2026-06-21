@@ -14,12 +14,31 @@ function getPermissions(user: any): string[] {
   return Array.from(new Set<string>(permissions))
 }
 
+function getRoleNames(user: any): string[] {
+  const roles = user.roles.map((ur: any) =>
+    String(ur.role.name)
+  )
+
+  return Array.from(new Set<string>(roles))
+}
+
 function hasAnyPermission(
   permissions: string[],
   allowed: string[]
 ) {
   return allowed.some((permission) =>
     permissions.includes(permission)
+  )
+}
+
+function isAdminUser(user: any) {
+  const permissions = getPermissions(user)
+  const roles = getRoleNames(user)
+
+  return (
+    permissions.includes("USER_MANAGE") ||
+    roles.includes("ADMIN") ||
+    roles.includes("SUPER_ADMIN")
   )
 }
 
@@ -97,6 +116,8 @@ function formatActionPlan(plan: any) {
       ? {
           id: plan.riskEventPart.id,
           status: plan.riskEventPart.status,
+          logisticsStatus:
+            plan.riskEventPart.logisticsStatus,
           partNumber: {
             id: plan.riskEventPart.partNumber.id,
             partNumber:
@@ -104,10 +125,48 @@ function formatActionPlan(plan: any) {
             description:
               plan.riskEventPart.partNumber.description,
             vehicleProgram:
-              plan.riskEventPart.partNumber.vehicleProgram,
+              plan.riskEventPart.partNumber
+                .vehicleProgram,
           },
         }
       : null,
+  }
+}
+
+function getActionPlanUpdateType(
+  oldCompleted: boolean,
+  newCompleted: boolean
+) {
+  if (!oldCompleted && newCompleted) {
+    return "ACTION_PLAN_COMPLETE" as const
+  }
+
+  if (oldCompleted && !newCompleted) {
+    return "ACTION_PLAN_REOPEN" as const
+  }
+
+  return "ACTION_PLAN_UPDATE" as const
+}
+
+function getDefaultHistoryReason(
+  changeType:
+    | "ACTION_PLAN_UPDATE"
+    | "ACTION_PLAN_COMPLETE"
+    | "ACTION_PLAN_REOPEN"
+    | "ACTION_PLAN_DELETE"
+) {
+  switch (changeType) {
+    case "ACTION_PLAN_COMPLETE":
+      return "Plano de ação concluído."
+
+    case "ACTION_PLAN_REOPEN":
+      return "Plano de ação reaberto."
+
+    case "ACTION_PLAN_DELETE":
+      return "Plano de ação excluído."
+
+    default:
+      return "Plano de ação atualizado."
   }
 }
 
@@ -143,7 +202,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "Sem permissão para editar plano de ação",
+            "Sem permissão para alterar plano de ação",
         },
         { status: 403 }
       )
@@ -153,11 +212,10 @@ export async function PATCH(
 
     const body = await req.json()
 
-    const currentPlan =
-      await prisma.riskActionPlan.findFirst({
+    const existingPlan =
+      await prisma.riskActionPlan.findUnique({
         where: {
           id: actionPlanId,
-          riskEventId: id,
         },
         include: {
           riskEvent: {
@@ -165,6 +223,13 @@ export async function PATCH(
               id: true,
               code: true,
               workflowStatus: true,
+              createdById: true,
+              assignedToId: true,
+            },
+          },
+          riskEventPart: {
+            include: {
+              partNumber: true,
             },
           },
           createdBy: {
@@ -184,7 +249,7 @@ export async function PATCH(
         },
       })
 
-    if (!currentPlan) {
+    if (!existingPlan || existingPlan.riskEventId !== id) {
       return NextResponse.json(
         {
           error:
@@ -194,37 +259,46 @@ export async function PATCH(
       )
     }
 
-    if (
-      currentPlan.riskEvent.workflowStatus !== "OPEN"
-    ) {
+    const risk = existingPlan.riskEvent
+
+    if (risk.workflowStatus !== "OPEN") {
       return NextResponse.json(
         {
           error:
-            "Só é possível alterar plano de ação de uma RM aberta",
+            "Só é possível alterar plano de ação em uma RM aberta",
         },
         { status: 400 }
       )
     }
 
-    const updateData: Prisma.RiskActionPlanUpdateInput =
-      {}
+    const isAdmin = isAdminUser(currentUser)
 
-    const oldFields: Record<
-      string,
-      Prisma.InputJsonValue | null
-    > = {}
+    const isRiskOwner =
+      risk.assignedToId === currentUser.id ||
+      risk.createdById === currentUser.id
 
-    const newFields: Record<
-      string,
-      Prisma.InputJsonValue | null
-    > = {}
+    const isActionResponsible =
+      existingPlan.assignedToId === currentUser.id
 
-    if (
+    if (!isAdmin && !isRiskOwner && !isActionResponsible) {
+      return NextResponse.json(
+        {
+          error:
+            "Somente o responsável pela ação, o dono da RM ou um admin pode alterar este plano de ação",
+        },
+        { status: 403 }
+      )
+    }
+
+    const updateData: Record<string, unknown> = {}
+
+    const hasDescription =
       Object.prototype.hasOwnProperty.call(
         body,
         "description"
       )
-    ) {
+
+    if (hasDescription) {
       const description =
         typeof body.description === "string"
           ? body.description.trim()
@@ -240,21 +314,16 @@ export async function PATCH(
         )
       }
 
-      if (description !== currentPlan.description) {
-        updateData.description = description
-
-        oldFields.description =
-          currentPlan.description
-        newFields.description = description
-      }
+      updateData.description = description
     }
 
-    if (
+    const hasDueDate =
       Object.prototype.hasOwnProperty.call(
         body,
         "dueDate"
       )
-    ) {
+
+    if (hasDueDate) {
       const dueDateRaw =
         typeof body.dueDate === "string"
           ? body.dueDate.trim()
@@ -282,23 +351,16 @@ export async function PATCH(
         )
       }
 
-      if (
-        dueDate.getTime() !==
-        new Date(currentPlan.dueDate).getTime()
-      ) {
-        updateData.dueDate = dueDate
-
-        oldFields.dueDate = currentPlan.dueDate
-        newFields.dueDate = dueDate
-      }
+      updateData.dueDate = dueDate
     }
 
-    if (
+    const hasAssignedToId =
       Object.prototype.hasOwnProperty.call(
         body,
         "assignedToId"
       )
-    ) {
+
+    if (hasAssignedToId) {
       const assignedToId =
         typeof body.assignedToId === "string"
           ? body.assignedToId.trim()
@@ -314,49 +376,98 @@ export async function PATCH(
         )
       }
 
-      if (assignedToId !== currentPlan.assignedToId) {
-        const assignedUser =
-          await prisma.user.findUnique({
-            where: {
-              id: assignedToId,
-            },
-            select: {
-              id: true,
-              isActive: true,
-            },
-          })
-
-        if (
-          !assignedUser ||
-          !assignedUser.isActive
-        ) {
-          return NextResponse.json(
-            {
-              error:
-                "Responsável informado não existe ou está inativo",
-            },
-            { status: 400 }
-          )
-        }
-
-        updateData.assignedTo = {
-          connect: {
+      const assignedUser =
+        await prisma.user.findUnique({
+          where: {
             id: assignedToId,
           },
-        }
+          select: {
+            id: true,
+            isActive: true,
+          },
+        })
 
-        oldFields.assignedToId =
-          currentPlan.assignedToId
-        newFields.assignedToId = assignedToId
+      if (!assignedUser || !assignedUser.isActive) {
+        return NextResponse.json(
+          {
+            error:
+              "Responsável informado não existe ou está inativo",
+          },
+          { status: 400 }
+        )
       }
+
+      updateData.assignedToId = assignedToId
     }
 
-    if (
+    const hasRiskEventPartId =
+      Object.prototype.hasOwnProperty.call(
+        body,
+        "riskEventPartId"
+      )
+
+    let newRiskPart:
+      | {
+          id: string
+          partNumberId: string
+          partNumber: {
+            id: string
+            partNumber: string
+            description: string | null
+            vehicleProgram: string | null
+          }
+        }
+      | null = null
+
+    if (hasRiskEventPartId) {
+      const riskEventPartId =
+        typeof body.riskEventPartId === "string"
+          ? body.riskEventPartId.trim()
+          : ""
+
+      if (!riskEventPartId) {
+        return NextResponse.json(
+          {
+            error:
+              "PN vinculado ao plano de ação é obrigatório",
+          },
+          { status: 400 }
+        )
+      }
+
+      const riskPart =
+        await prisma.riskEventPart.findFirst({
+          where: {
+            id: riskEventPartId,
+            riskEventId: risk.id,
+          },
+          include: {
+            partNumber: true,
+          },
+        })
+
+      if (!riskPart) {
+        return NextResponse.json(
+          {
+            error:
+              "PN informado não pertence a esta RM",
+          },
+          { status: 400 }
+        )
+      }
+
+      newRiskPart = riskPart
+
+      updateData.riskEventPartId = riskEventPartId
+    }
+
+    const hasIsCompleted =
       Object.prototype.hasOwnProperty.call(
         body,
         "isCompleted"
       )
-    ) {
+
+    if (hasIsCompleted) {
       if (typeof body.isCompleted !== "boolean") {
         return NextResponse.json(
           {
@@ -367,47 +478,46 @@ export async function PATCH(
         )
       }
 
-      if (body.isCompleted !== currentPlan.isCompleted) {
-        updateData.isCompleted = body.isCompleted
-        updateData.completedAt = body.isCompleted
-          ? new Date()
-          : null
-
-        oldFields.isCompleted =
-          currentPlan.isCompleted
-        newFields.isCompleted = body.isCompleted
-
-        oldFields.completedAt =
-          currentPlan.completedAt
-        newFields.completedAt =
-          updateData.completedAt as Date | null
-      }
+      updateData.isCompleted = body.isCompleted
+      updateData.completedAt = body.isCompleted
+        ? new Date()
+        : null
     }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         {
-          message:
-            "Nenhuma alteração identificada",
-          data: formatActionPlan(currentPlan),
+          error:
+            "Nenhum campo informado para atualização",
         },
-        { status: 200 }
+        { status: 400 }
       )
     }
+
+    const reason =
+      typeof body.reason === "string" &&
+      body.reason.trim()
+        ? body.reason.trim()
+        : null
 
     const userAgent =
       req.headers.get("user-agent") || null
 
     const ipAddress = getRequestIp(req)
 
-    const updatedPlan =
+    const updatedActionPlan =
       await prisma.$transaction(async (tx) => {
         const plan = await tx.riskActionPlan.update({
           where: {
-            id: currentPlan.id,
+            id: existingPlan.id,
           },
           data: updateData,
           include: {
+            riskEventPart: {
+              include: {
+                partNumber: true,
+              },
+            },
             createdBy: {
               select: {
                 id: true,
@@ -425,33 +535,119 @@ export async function PATCH(
           },
         })
 
+        const changeType = getActionPlanUpdateType(
+          existingPlan.isCompleted,
+          plan.isCompleted
+        )
+
+        const partForHistory =
+          plan.riskEventPart || newRiskPart || null
+
+        await tx.riskActionPlanHistory.create({
+          data: {
+            actionPlanId: plan.id,
+            riskEventId: risk.id,
+
+            riskEventPartId:
+              partForHistory?.id || null,
+            partNumberId:
+              partForHistory?.partNumberId || null,
+
+            changeType,
+
+            oldDescription:
+              existingPlan.description,
+            newDescription: plan.description,
+
+            oldDueDate: existingPlan.dueDate,
+            newDueDate: plan.dueDate,
+
+            oldAssignedToId:
+              existingPlan.assignedToId,
+            newAssignedToId: plan.assignedToId,
+
+            oldCompleted:
+              existingPlan.isCompleted,
+            newCompleted: plan.isCompleted,
+
+            reason:
+              reason ||
+              getDefaultHistoryReason(changeType),
+
+            changedById: currentUser.id,
+          },
+        })
+
+        const auditAction =
+          changeType === "ACTION_PLAN_COMPLETE"
+            ? "RISK_ACTION_PLAN_COMPLETE"
+            : changeType === "ACTION_PLAN_REOPEN"
+              ? "RISK_ACTION_PLAN_REOPEN"
+              : "RISK_ACTION_PLAN_UPDATE"
+
         await tx.auditLog.create({
           data: {
             entityType: "RiskEvent",
-            entityId: currentPlan.riskEvent.id,
-            action: "RISK_ACTION_PLAN_UPDATE",
+            entityId: risk.id,
+            action: auditAction,
             changedBy: currentUser.id,
             ipAddress,
             oldValue: toPrismaJsonObject({
-              riskEventId:
-                currentPlan.riskEvent.id,
-              riskCode:
-                currentPlan.riskEvent.code,
-              actionPlanId: currentPlan.id,
-              fields: oldFields,
+              riskEventId: risk.id,
+              riskCode: risk.code,
+
+              actionPlanId: existingPlan.id,
+
+              riskEventPartId:
+                existingPlan.riskEventPartId,
+              partNumberId:
+                existingPlan.riskEventPart
+                  ?.partNumberId || null,
+              partNumber:
+                existingPlan.riskEventPart
+                  ?.partNumber.partNumber || null,
+
+              description:
+                existingPlan.description,
+              dueDate: existingPlan.dueDate,
+
+              assignedToId:
+                existingPlan.assignedToId,
+
+              isCompleted:
+                existingPlan.isCompleted,
+              completedAt:
+                existingPlan.completedAt,
             }),
             newValue: toPrismaJsonObject({
-              riskEventId:
-                currentPlan.riskEvent.id,
-              riskCode:
-                currentPlan.riskEvent.code,
-              actionPlanId: currentPlan.id,
-              fields: newFields,
+              riskEventId: risk.id,
+              riskCode: risk.code,
+
+              actionPlanId: plan.id,
+
+              riskEventPartId:
+                plan.riskEventPartId,
+              partNumberId:
+                plan.riskEventPart
+                  ?.partNumberId || null,
+              partNumber:
+                plan.riskEventPart?.partNumber
+                  .partNumber || null,
+
+              description: plan.description,
+              dueDate: plan.dueDate,
+
+              assignedToId: plan.assignedToId,
+
+              isCompleted: plan.isCompleted,
+              completedAt: plan.completedAt,
+
               changedByUser: {
                 id: currentUser.id,
                 name: currentUser.name,
                 email: currentUser.email,
               },
+
               userAgent,
             }),
           },
@@ -463,7 +659,7 @@ export async function PATCH(
     return NextResponse.json({
       message:
         "Plano de ação atualizado com sucesso",
-      data: formatActionPlan(updatedPlan),
+      data: formatActionPlan(updatedActionPlan),
     })
   } catch (error) {
     console.error(error)
@@ -518,11 +714,10 @@ export async function DELETE(
 
     const { id, actionPlanId } = await params
 
-    const currentPlan =
-      await prisma.riskActionPlan.findFirst({
+    const existingPlan =
+      await prisma.riskActionPlan.findUnique({
         where: {
           id: actionPlanId,
-          riskEventId: id,
         },
         include: {
           riskEvent: {
@@ -530,6 +725,13 @@ export async function DELETE(
               id: true,
               code: true,
               workflowStatus: true,
+              createdById: true,
+              assignedToId: true,
+            },
+          },
+          riskEventPart: {
+            include: {
+              partNumber: true,
             },
           },
           createdBy: {
@@ -549,7 +751,7 @@ export async function DELETE(
         },
       })
 
-    if (!currentPlan) {
+    if (!existingPlan || existingPlan.riskEventId !== id) {
       return NextResponse.json(
         {
           error:
@@ -559,15 +761,34 @@ export async function DELETE(
       )
     }
 
-    if (
-      currentPlan.riskEvent.workflowStatus !== "OPEN"
-    ) {
+    const risk = existingPlan.riskEvent
+
+    if (risk.workflowStatus !== "OPEN") {
       return NextResponse.json(
         {
           error:
-            "Só é possível excluir plano de ação de uma RM aberta",
+            "Só é possível excluir plano de ação em uma RM aberta",
         },
         { status: 400 }
+      )
+    }
+
+    const isAdmin = isAdminUser(currentUser)
+
+    const isRiskOwner =
+      risk.assignedToId === currentUser.id ||
+      risk.createdById === currentUser.id
+
+    const isActionResponsible =
+      existingPlan.assignedToId === currentUser.id
+
+    if (!isAdmin && !isRiskOwner && !isActionResponsible) {
+      return NextResponse.json(
+        {
+          error:
+            "Somente o responsável pela ação, o dono da RM ou um admin pode excluir este plano de ação",
+        },
+        { status: 403 }
       )
     }
 
@@ -577,43 +798,86 @@ export async function DELETE(
     const ipAddress = getRequestIp(req)
 
     await prisma.$transaction(async (tx) => {
+      await tx.riskActionPlanHistory.create({
+        data: {
+          actionPlanId: existingPlan.id,
+          riskEventId: risk.id,
+
+          riskEventPartId:
+            existingPlan.riskEventPartId,
+          partNumberId:
+            existingPlan.riskEventPart
+              ?.partNumberId || null,
+
+          changeType: "ACTION_PLAN_DELETE",
+
+          oldDescription:
+            existingPlan.description,
+          newDescription: null,
+
+          oldDueDate: existingPlan.dueDate,
+          newDueDate: null,
+
+          oldAssignedToId:
+            existingPlan.assignedToId,
+          newAssignedToId: null,
+
+          oldCompleted:
+            existingPlan.isCompleted,
+          newCompleted: null,
+
+          reason: "Plano de ação excluído.",
+
+          changedById: currentUser.id,
+        },
+      })
+
       await tx.riskActionPlan.delete({
         where: {
-          id: currentPlan.id,
+          id: existingPlan.id,
         },
       })
 
       await tx.auditLog.create({
         data: {
           entityType: "RiskEvent",
-          entityId: currentPlan.riskEvent.id,
+          entityId: risk.id,
           action: "RISK_ACTION_PLAN_DELETE",
           changedBy: currentUser.id,
           ipAddress,
           oldValue: toPrismaJsonObject({
-            riskEventId:
-              currentPlan.riskEvent.id,
-            riskCode:
-              currentPlan.riskEvent.code,
-            actionPlanId: currentPlan.id,
-            description: currentPlan.description,
-            dueDate: currentPlan.dueDate,
-            isCompleted:
-              currentPlan.isCompleted,
-            completedAt: currentPlan.completedAt,
+            riskEventId: risk.id,
+            riskCode: risk.code,
+
+            actionPlanId: existingPlan.id,
+
+            riskEventPartId:
+              existingPlan.riskEventPartId,
+            partNumberId:
+              existingPlan.riskEventPart
+                ?.partNumberId || null,
+            partNumber:
+              existingPlan.riskEventPart?.partNumber
+                .partNumber || null,
+
+            description: existingPlan.description,
+            dueDate: existingPlan.dueDate,
+
             assignedToId:
-              currentPlan.assignedToId,
-            createdById:
-              currentPlan.createdById,
+              existingPlan.assignedToId,
+
+            isCompleted:
+              existingPlan.isCompleted,
+            completedAt:
+              existingPlan.completedAt,
+
             deletedByUser: {
               id: currentUser.id,
               name: currentUser.name,
               email: currentUser.email,
             },
+
             userAgent,
-          }),
-          newValue: toPrismaJsonObject({
-            deleted: true,
           }),
         },
       })

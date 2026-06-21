@@ -1,7 +1,36 @@
 import { NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
+
+const allowedOpeningReasons = [
+  "TIER_2_CHANGE",
+  "PLANT_CHANGE",
+  "SUPPLIER_TRANSFER_PHASE_OUT",
+  "MANUFACTURING_PROCESS_CHANGE",
+] as const
+
+const allowedWorkflowStatuses = [
+  "OPEN",
+  "CLOSED",
+  "CANCELED",
+] as const
+
+const allowedRiskLevels = [
+  "GREEN",
+  "YELLOW",
+  "RED",
+] as const
+
+const openingReasonLabels: Record<string, string> = {
+  TIER_2_CHANGE: "Troca ou Adição de Tier 2",
+  PLANT_CHANGE: "Alteração de Planta",
+  SUPPLIER_TRANSFER_PHASE_OUT:
+    "Transferência de Fornecedor (Phase Out)",
+  MANUFACTURING_PROCESS_CHANGE:
+    "Mudança no Processo de Fabricação",
+}
 
 function getPermissions(user: any): string[] {
   const permissions = user.roles.flatMap((ur: any) =>
@@ -13,23 +42,159 @@ function getPermissions(user: any): string[] {
   return Array.from(new Set<string>(permissions))
 }
 
-function hasPermission(
+function hasAnyPermission(
   permissions: string[],
-  permission: string
+  allowed: string[]
 ) {
-  return permissions.includes(permission)
+  return allowed.some((permission) =>
+    permissions.includes(permission)
+  )
 }
 
-export async function GET(
-  _req: Request,
-  {
-    params,
-  }: {
-    params: Promise<{
-      id: string
-    }>
+function normalizeIp(ip: string | null) {
+  if (!ip) return null
+
+  const cleanIp = ip.split(",")[0]?.trim()
+
+  if (!cleanIp) return null
+
+  if (cleanIp.startsWith("::ffff:")) {
+    return cleanIp.replace("::ffff:", "")
   }
-) {
+
+  if (cleanIp === "::1") {
+    return "127.0.0.1"
+  }
+
+  return cleanIp
+}
+
+function getRequestIp(req: Request) {
+  const forwardedFor = req.headers.get("x-forwarded-for")
+  const realIp = req.headers.get("x-real-ip")
+  const cfIp = req.headers.get("cf-connecting-ip")
+
+  return normalizeIp(
+    forwardedFor || realIp || cfIp || null
+  )
+}
+
+function toPrismaJsonObject(
+  value: Record<string, unknown>
+): Prisma.InputJsonObject {
+  return JSON.parse(
+    JSON.stringify(value)
+  ) as Prisma.InputJsonObject
+}
+
+function getIsoWeekAndYear(date = new Date()) {
+  const target = new Date(
+    Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    )
+  )
+
+  const dayNumber =
+    target.getUTCDay() === 0
+      ? 7
+      : target.getUTCDay()
+
+  target.setUTCDate(
+    target.getUTCDate() + 4 - dayNumber
+  )
+
+  const yearStart = new Date(
+    Date.UTC(target.getUTCFullYear(), 0, 1)
+  )
+
+  const week = Math.ceil(
+    ((target.getTime() - yearStart.getTime()) /
+      86400000 +
+      1) /
+      7
+  )
+
+  return {
+    week,
+    year: target.getUTCFullYear(),
+  }
+}
+
+function formatRiskItem(risk: any) {
+  return {
+    id: risk.id,
+
+    code: risk.code,
+    sequenceNumber: risk.sequenceNumber,
+    codePrefix: risk.codePrefix,
+
+    title: risk.title,
+    description: risk.description,
+
+    openingReason: risk.openingReason,
+
+    workflowStatus: risk.workflowStatus,
+    riskLevel: risk.riskLevel,
+
+    createdWeek: risk.createdWeek,
+    createdYear: risk.createdYear,
+
+    createdAt: risk.createdAt,
+    updatedAt: risk.updatedAt,
+    closedAt: risk.closedAt,
+
+    supplier: risk.supplier
+      ? {
+          id: risk.supplier.id,
+          name: risk.supplier.name,
+          supplierCodeSap:
+            risk.supplier.supplierCodeSap,
+          country: risk.supplier.country
+            ? {
+                id: risk.supplier.country.id,
+                name: risk.supplier.country.name,
+                isoCode:
+                  risk.supplier.country.isoCode,
+              }
+            : null,
+        }
+      : null,
+
+    createdBy: risk.createdBy
+      ? {
+          id: risk.createdBy.id,
+          name: risk.createdBy.name,
+          email: risk.createdBy.email,
+        }
+      : null,
+
+    assignedTo: risk.assignedTo
+      ? {
+          id: risk.assignedTo.id,
+          name: risk.assignedTo.name,
+          email: risk.assignedTo.email,
+        }
+      : null,
+
+    closedBy: risk.closedBy
+      ? {
+          id: risk.closedBy.id,
+          name: risk.closedBy.name,
+          email: risk.closedBy.email,
+        }
+      : null,
+
+    counts: {
+      parts: risk._count?.parts ?? 0,
+      actionPlans: risk._count?.actionPlans ?? 0,
+      logistics: risk._count?.logistics ?? 0,
+    },
+  }
+}
+
+export async function GET(req: Request) {
   try {
     const currentUser = await getUserFromRequest()
 
@@ -42,74 +207,477 @@ export async function GET(
 
     const permissions = getPermissions(currentUser)
 
-    if (!hasPermission(permissions, "RISK_VIEW")) {
+    if (!hasAnyPermission(permissions, ["RISK_VIEW"])) {
       return NextResponse.json(
         {
           error:
-            "Sem permissão para visualizar esta RM",
+            "Sem permissão para visualizar RMs",
         },
         { status: 403 }
       )
     }
 
-    const { id } = await params
+    const { searchParams } = new URL(req.url)
 
-    const risk = await prisma.riskEvent.findUnique({
-      where: {
-        id,
-      },
-      include: {
-        supplier: {
-          include: {
-            country: true,
+    const pageParam = Number(
+      searchParams.get("page") || "1"
+    )
+
+    const pageSizeParam = Number(
+      searchParams.get("pageSize") || "20"
+    )
+
+    const page =
+      Number.isFinite(pageParam) && pageParam > 0
+        ? pageParam
+        : 1
+
+    const pageSize =
+      Number.isFinite(pageSizeParam) &&
+      pageSizeParam > 0
+        ? Math.min(pageSizeParam, 100)
+        : 20
+
+    const search =
+      searchParams.get("search")?.trim() || ""
+
+    const workflowStatus =
+      searchParams.get("workflowStatus")?.trim() || ""
+
+    const riskLevel =
+      searchParams.get("riskLevel")?.trim() || ""
+
+    const supplierId =
+      searchParams.get("supplierId")?.trim() || ""
+
+    const assignedToId =
+      searchParams.get("assignedToId")?.trim() || ""
+
+    const openingReason =
+      searchParams.get("openingReason")?.trim() || ""
+
+    const where: Prisma.RiskEventWhereInput = {}
+
+    if (search) {
+      where.OR = [
+        {
+          code: {
+            contains: search,
+            mode: "insensitive",
           },
         },
-
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        {
+          title: {
+            contains: search,
+            mode: "insensitive",
           },
         },
-
-        assignedTo: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        {
+          description: {
+            contains: search,
+            mode: "insensitive",
           },
         },
-
-        closedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-
-        parts: {
-          include: {
-            partNumber: true,
-            assignedTo: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
+        {
+          supplier: {
+            name: {
+              contains: search,
+              mode: "insensitive",
             },
           },
-          orderBy: {
-            createdAt: "desc",
+        },
+        {
+          supplier: {
+            supplierCodeSap: {
+              contains: search,
+              mode: "insensitive",
+            },
           },
         },
+      ]
+    }
 
-        actionPlans: {
+    if (
+      workflowStatus &&
+      allowedWorkflowStatuses.includes(
+        workflowStatus as any
+      )
+    ) {
+      where.workflowStatus = workflowStatus as any
+    }
+
+    if (
+      riskLevel &&
+      allowedRiskLevels.includes(riskLevel as any)
+    ) {
+      where.riskLevel = riskLevel as any
+    }
+
+    if (supplierId) {
+      where.supplierId = supplierId
+    }
+
+    if (assignedToId) {
+      where.assignedToId = assignedToId
+    }
+
+    if (
+      openingReason &&
+      allowedOpeningReasons.includes(
+        openingReason as any
+      )
+    ) {
+      where.openingReason = openingReason as any
+    }
+
+    const skip = (page - 1) * pageSize
+
+    const [
+      total,
+      open,
+      closed,
+      red,
+      yellow,
+      green,
+      risks,
+    ] = await prisma.$transaction([
+      prisma.riskEvent.count({
+        where,
+      }),
+
+      prisma.riskEvent.count({
+        where: {
+          ...where,
+          workflowStatus: "OPEN",
+        },
+      }),
+
+      prisma.riskEvent.count({
+        where: {
+          ...where,
+          workflowStatus: "CLOSED",
+        },
+      }),
+
+      prisma.riskEvent.count({
+        where: {
+          ...where,
+          riskLevel: "RED",
+        },
+      }),
+
+      prisma.riskEvent.count({
+        where: {
+          ...where,
+          riskLevel: "YELLOW",
+        },
+      }),
+
+      prisma.riskEvent.count({
+        where: {
+          ...where,
+          riskLevel: "GREEN",
+        },
+      }),
+
+      prisma.riskEvent.findMany({
+        where,
+        include: {
+          supplier: {
+            include: {
+              country: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          assignedTo: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          closedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          _count: {
+            select: {
+              parts: true,
+              actionPlans: true,
+              logistics: true,
+            },
+          },
+        },
+        orderBy: [
+          {
+            sequenceNumber: "asc",
+          },
+        ],
+        skip,
+        take: pageSize,
+      }),
+    ])
+
+    const totalPages =
+      total > 0 ? Math.ceil(total / pageSize) : 1
+
+    return NextResponse.json({
+      data: risks.map(formatRiskItem),
+
+      stats: {
+        total,
+        open,
+        closed,
+        red,
+        yellow,
+        green,
+      },
+
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages,
+      },
+    })
+  } catch (error) {
+    console.error("ERRO AO LISTAR RMS:", error)
+
+    return NextResponse.json(
+      {
+        error: "Erro ao listar RMs",
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const currentUser = await getUserFromRequest()
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Não autenticado" },
+        { status: 401 }
+      )
+    }
+
+    const permissions = getPermissions(currentUser)
+
+    if (
+      !hasAnyPermission(permissions, [
+        "RISK_CREATE",
+        "USER_MANAGE",
+      ])
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Sem permissão para criar RM",
+        },
+        { status: 403 }
+      )
+    }
+
+    const body = await req.json()
+
+    const supplierId =
+      typeof body.supplierId === "string"
+        ? body.supplierId.trim()
+        : ""
+
+    const openingReason =
+      typeof body.openingReason === "string"
+        ? body.openingReason.trim()
+        : ""
+
+    const title =
+      typeof body.title === "string"
+        ? body.title.trim()
+        : ""
+
+    const description =
+      typeof body.description === "string"
+        ? body.description.trim()
+        : ""
+
+    const assignedToId =
+      typeof body.assignedToId === "string"
+        ? body.assignedToId.trim()
+        : ""
+
+    const riskLevel =
+      typeof body.riskLevel === "string"
+        ? body.riskLevel.trim()
+        : "GREEN"
+
+    if (!supplierId) {
+      return NextResponse.json(
+        {
+          error: "Fornecedor é obrigatório",
+        },
+        { status: 400 }
+      )
+    }
+
+    if (
+      !openingReason ||
+      !allowedOpeningReasons.includes(
+        openingReason as any
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Motivo de abertura inválido ou não informado",
+        },
+        { status: 400 }
+      )
+    }
+
+    if (
+      riskLevel &&
+      !allowedRiskLevels.includes(riskLevel as any)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Farol da RM inválido",
+        },
+        { status: 400 }
+      )
+    }
+
+    const supplier = await prisma.supplier.findUnique({
+      where: {
+        id: supplierId,
+      },
+      include: {
+        country: true,
+      },
+    })
+
+    if (!supplier) {
+      return NextResponse.json(
+        {
+          error:
+            "Fornecedor não encontrado",
+        },
+        { status: 404 }
+      )
+    }
+
+    let assignedUser:
+      | {
+          id: string
+          isActive: boolean
+        }
+      | null = null
+
+    if (assignedToId && assignedToId !== "none") {
+      assignedUser = await prisma.user.findUnique({
+        where: {
+          id: assignedToId,
+        },
+        select: {
+          id: true,
+          isActive: true,
+        },
+      })
+
+      if (!assignedUser || !assignedUser.isActive) {
+        return NextResponse.json(
+          {
+            error:
+              "Responsável informado não existe ou está inativo",
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    const codePrefix =
+      supplier.country?.isoCode?.toUpperCase() === "BR"
+        ? "RM"
+        : "IRM"
+
+    const { week, year } = getIsoWeekAndYear()
+
+    const userAgent =
+      req.headers.get("user-agent") || null
+
+    const ipAddress = getRequestIp(req)
+
+    const createdRisk =
+      await prisma.$transaction(async (tx) => {
+        const sequence = await tx.riskSequence.upsert({
+          where: {
+            key: "RISK_EVENT",
+          },
+          create: {
+            key: "RISK_EVENT",
+            currentNumber: 1,
+          },
+          update: {
+            currentNumber: {
+              increment: 1,
+            },
+          },
+        })
+
+        const sequenceNumber =
+          sequence.currentNumber
+
+        const code = `${codePrefix}${String(
+          sequenceNumber
+        ).padStart(3, "0")}`
+
+        const risk = await tx.riskEvent.create({
+          data: {
+            code,
+            sequenceNumber,
+            codePrefix: codePrefix as any,
+
+            title:
+              title ||
+              openingReasonLabels[openingReason] ||
+              code,
+
+            description: description || null,
+
+            openingReason: openingReason as any,
+
+            supplierId: supplier.id,
+
+            workflowStatus: "OPEN",
+            riskLevel: riskLevel as any,
+
+            createdWeek: week,
+            createdYear: year,
+
+            createdById: currentUser.id,
+            assignedToId:
+              assignedToId && assignedToId !== "none"
+                ? assignedToId
+                : null,
+          },
           include: {
-            riskEventPart: {
+            supplier: {
               include: {
-                partNumber: true,
+                country: true,
               },
             },
             createdBy: {
@@ -126,418 +694,88 @@ export async function GET(
                 email: true,
               },
             },
-          },
-          orderBy: [
-            {
-              isCompleted: "asc",
-            },
-            {
-              dueDate: "asc",
-            },
-          ],
-        },
-
-        logistics: {
-          include: {
-            requester: {
+            closedBy: {
               select: {
                 id: true,
                 name: true,
                 email: true,
               },
             },
-            reviewer: {
+            _count: {
               select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-            buffers: {
-              include: {
-                partNumber: true,
-              },
-              orderBy: {
-                createdAt: "desc",
+                parts: true,
+                actionPlans: true,
+                logistics: true,
               },
             },
           },
-          orderBy: {
-            requestedAt: "desc",
-          },
-        },
-
-        comments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-
-        statusHistory: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: {
-            changedAt: "desc",
-          },
-        },
-
-        partHistory: {
-          include: {
-            partNumber: {
-              select: {
-                id: true,
-                partNumber: true,
-                description: true,
-              },
-            },
-            changedBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: {
-            changedAt: "desc",
-          },
-        },
-
-        actionPlanHistory: {
-          include: {
-            actionPlan: {
-              select: {
-                id: true,
-                description: true,
-              },
-            },
-            riskEventPart: {
-              include: {
-                partNumber: true,
-              },
-            },
-            partNumber: true,
-            changedBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: {
-            changedAt: "desc",
-          },
-        },
-      },
-    })
-
-    if (!risk) {
-      return NextResponse.json(
-        { error: "RM não encontrada" },
-        { status: 404 }
-      )
-    }
-
-    const now = new Date()
-
-    return NextResponse.json({
-      id: risk.id,
-
-      code: risk.code,
-      sequenceNumber: risk.sequenceNumber,
-      codePrefix: risk.codePrefix,
-
-      title: risk.title,
-      description: risk.description,
-
-      openingReason: risk.openingReason,
-
-      workflowStatus: risk.workflowStatus,
-      riskLevel: risk.riskLevel,
-
-      status: {
-        id: risk.workflowStatus,
-        name: risk.workflowStatus,
-      },
-
-      createdWeek: risk.createdWeek,
-      createdYear: risk.createdYear,
-
-      createdAt: risk.createdAt,
-      updatedAt: risk.updatedAt,
-      closedAt: risk.closedAt,
-
-      supplier: risk.supplier
-        ? {
-            id: risk.supplier.id,
-            name: risk.supplier.name,
-            supplierCodeSap:
-              risk.supplier.supplierCodeSap,
-            country: risk.supplier.country
-              ? {
-                  id: risk.supplier.country.id,
-                  name: risk.supplier.country.name,
-                  isoCode:
-                    risk.supplier.country.isoCode,
-                }
-              : null,
-          }
-        : null,
-
-      createdBy: risk.createdBy,
-
-      assignedTo: risk.assignedTo,
-
-      closedBy: risk.closedBy,
-
-      parts: risk.parts.map((part) => ({
-        id: part.id,
-
-        status: part.status,
-        logisticsStatus: part.logisticsStatus,
-
-        createdAt: part.createdAt,
-        updatedAt: part.updatedAt,
-
-        partNumber: {
-          id: part.partNumber.id,
-          partNumber: part.partNumber.partNumber,
-          description: part.partNumber.description,
-          vehicleProgram:
-            part.partNumber.vehicleProgram,
-          createdAt: part.partNumber.createdAt,
-        },
-
-        assignedTo: part.assignedTo
-          ? {
-              id: part.assignedTo.id,
-              name: part.assignedTo.name,
-              email: part.assignedTo.email,
-            }
-          : null,
-      })),
-
-      actionPlans: risk.actionPlans.map((plan) => ({
-        id: plan.id,
-
-        description: plan.description,
-        dueDate: plan.dueDate,
-
-        isCompleted: plan.isCompleted,
-        completedAt: plan.completedAt,
-
-        isOverdue:
-          !plan.isCompleted &&
-          new Date(plan.dueDate) < now,
-
-        createdAt: plan.createdAt,
-        updatedAt: plan.updatedAt,
-
-        createdBy: plan.createdBy,
-
-        assignedTo: plan.assignedTo,
-
-        riskEventPart: plan.riskEventPart
-          ? {
-              id: plan.riskEventPart.id,
-              status: plan.riskEventPart.status,
-              logisticsStatus:
-                plan.riskEventPart.logisticsStatus,
-              partNumber: {
-                id: plan.riskEventPart.partNumber.id,
-                partNumber:
-                  plan.riskEventPart.partNumber
-                    .partNumber,
-                description:
-                  plan.riskEventPart.partNumber
-                    .description,
-                vehicleProgram:
-                  plan.riskEventPart.partNumber
-                    .vehicleProgram,
-              },
-            }
-          : null,
-      })),
-
-      logistics: risk.logistics.map((request) => ({
-        id: request.id,
-
-        status: request.status,
-
-        requestedAt: request.requestedAt,
-        reviewedAt: request.reviewedAt,
-
-        notes: request.notes,
-        rejectionReason: request.rejectionReason,
-
-        requester: request.requester,
-        reviewer: request.reviewer,
-
-        buffers: request.buffers.map((buffer) => ({
-          id: buffer.id,
-
-          bufferQuantity: buffer.bufferQuantity,
-          coverageDays: buffer.coverageDays,
-          validUntil: buffer.validUntil,
-
-          notes: buffer.notes,
-          createdAt: buffer.createdAt,
-
-          partNumber: {
-            id: buffer.partNumber.id,
-            partNumber:
-              buffer.partNumber.partNumber,
-            description:
-              buffer.partNumber.description,
-            vehicleProgram:
-              buffer.partNumber.vehicleProgram,
-          },
-        })),
-      })),
-
-      comments: risk.comments.map((comment) => ({
-        id: comment.id,
-
-        message: comment.message,
-        createdAt: comment.createdAt,
-
-        user: comment.user,
-      })),
-
-      statusHistory: risk.statusHistory.map(
-        (history) => ({
-          id: history.id,
-
-          oldStatus: history.oldStatus,
-          newStatus: history.newStatus,
-
-          changedAt: history.changedAt,
-
-          user: history.user,
         })
-      ),
 
-      partHistory: risk.partHistory.map((history) => ({
-        id: history.id,
+        await tx.auditLog.create({
+          data: {
+            entityType: "RiskEvent",
+            entityId: risk.id,
+            action: "RISK_CREATE",
+            changedBy: currentUser.id,
+            ipAddress,
+            newValue: toPrismaJsonObject({
+              id: risk.id,
+              code: risk.code,
+              sequenceNumber:
+                risk.sequenceNumber,
+              codePrefix: risk.codePrefix,
 
-        changeType: history.changeType,
+              title: risk.title,
+              description: risk.description,
 
-        oldStatus: history.oldStatus,
-        newStatus: history.newStatus,
+              openingReason:
+                risk.openingReason,
 
-        oldLogisticsStatus:
-          history.oldLogisticsStatus,
-        newLogisticsStatus:
-          history.newLogisticsStatus,
+              supplierId: risk.supplierId,
+              supplierName: supplier.name,
 
-        oldAssignedToId: history.oldAssignedToId,
-        newAssignedToId: history.newAssignedToId,
+              workflowStatus:
+                risk.workflowStatus,
+              riskLevel: risk.riskLevel,
 
-        oldDescription: history.oldDescription,
-        newDescription: history.newDescription,
+              createdWeek: risk.createdWeek,
+              createdYear: risk.createdYear,
 
-        oldVehicleProgram:
-          history.oldVehicleProgram,
-        newVehicleProgram:
-          history.newVehicleProgram,
+              createdById: currentUser.id,
+              assignedToId:
+                risk.assignedToId,
 
-        reason: history.reason,
+              createdByUser: {
+                id: currentUser.id,
+                name: currentUser.name,
+                email: currentUser.email,
+              },
 
-        changedAt: history.changedAt,
-
-        partNumber: history.partNumber,
-
-        changedBy: history.changedBy,
-      })),
-
-      actionPlanHistory: risk.actionPlanHistory.map(
-        (history) => ({
-          id: history.id,
-
-          changeType: history.changeType,
-
-          oldDescription: history.oldDescription,
-          newDescription: history.newDescription,
-
-          oldDueDate: history.oldDueDate,
-          newDueDate: history.newDueDate,
-
-          oldAssignedToId: history.oldAssignedToId,
-          newAssignedToId: history.newAssignedToId,
-
-          oldCompleted: history.oldCompleted,
-          newCompleted: history.newCompleted,
-
-          reason: history.reason,
-
-          changedAt: history.changedAt,
-
-          actionPlan: history.actionPlan
-            ? {
-                id: history.actionPlan.id,
-                description:
-                  history.actionPlan.description,
-              }
-            : null,
-
-          riskEventPart: history.riskEventPart
-            ? {
-                id: history.riskEventPart.id,
-                partNumber: {
-                  id: history.riskEventPart.partNumber.id,
-                  partNumber:
-                    history.riskEventPart.partNumber
-                      .partNumber,
-                  description:
-                    history.riskEventPart.partNumber
-                      .description,
-                  vehicleProgram:
-                    history.riskEventPart.partNumber
-                      .vehicleProgram,
-                },
-              }
-            : null,
-
-          partNumber: history.partNumber
-            ? {
-                id: history.partNumber.id,
-                partNumber:
-                  history.partNumber.partNumber,
-                description:
-                  history.partNumber.description,
-                vehicleProgram:
-                  history.partNumber.vehicleProgram,
-              }
-            : null,
-
-          changedBy: history.changedBy,
+              userAgent,
+            }),
+          },
         })
-      ),
-    })
-  } catch (error) {
-    console.error(error)
+
+        return risk
+      })
 
     return NextResponse.json(
       {
-        error:
-          "Erro ao buscar detalhes da RM",
+        message: "RM criada com sucesso",
+        data: formatRiskItem(createdRisk),
+      },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error("ERRO AO CRIAR RM:", error)
+
+    return NextResponse.json(
+      {
+        error: "Erro ao criar RM",
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     )

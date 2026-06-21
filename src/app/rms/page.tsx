@@ -337,6 +337,7 @@ export default function RisksPage() {
 
       if (!suppliersRes.ok) {
         throw new Error(
+          suppliersData.details ||
           suppliersData.error ||
           "Erro ao carregar fornecedores"
         )
@@ -344,6 +345,7 @@ export default function RisksPage() {
 
       if (!usersRes.ok) {
         throw new Error(
+          usersData.details ||
           usersData.error ||
           "Erro ao carregar responsáveis"
         )
@@ -360,7 +362,7 @@ export default function RisksPage() {
       setSuppliers(supplierList)
       setUsers(userList)
     } catch (error) {
-      console.error(error)
+      console.error("ERRO AO CARREGAR OPÇÕES DE FILTRO:", error)
 
       toast.error(
         error instanceof Error
@@ -438,9 +440,16 @@ export default function RisksPage() {
 
       const data = await res.json()
 
+      console.log("STATUS API LISTA RMS:", res.status)
+      console.log("RESPOSTA API LISTA RMS:", data)
+
       if (!res.ok) {
+        alert(JSON.stringify(data, null, 2))
+
         throw new Error(
-          data.error || "Erro ao carregar RMs"
+          data.details ||
+          data.error ||
+          "Erro ao carregar RMs"
         )
       }
 
@@ -465,7 +474,7 @@ export default function RisksPage() {
         }
       )
     } catch (error) {
-      console.error(error)
+      console.error("ERRO AO CARREGAR LISTA DE RMS:", error)
 
       toast.error(
         error instanceof Error
