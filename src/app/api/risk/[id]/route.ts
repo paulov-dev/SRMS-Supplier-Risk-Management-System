@@ -20,6 +20,39 @@ function hasPermission(
   return permissions.includes(permission)
 }
 
+function formatAssessment(assessment: any) {
+  if (!assessment) {
+    return null
+  }
+
+  return {
+    id: assessment.id,
+
+    isPartCanceled: assessment.isPartCanceled,
+    hasDemand: assessment.hasDemand,
+    sourceNamed: assessment.sourceNamed,
+
+    actionPlanReceived: assessment.actionPlanReceived,
+    scheduleMeetsDevelopment:
+      assessment.scheduleMeetsDevelopment,
+    technicalCommercialOk:
+      assessment.technicalCommercialOk,
+    productionRiskMitigated:
+      assessment.productionRiskMitigated,
+    eopManagementOk: assessment.eopManagementOk,
+
+    deviationPfpFinished:
+      assessment.deviationPfpFinished,
+    onlyVdaPending: assessment.onlyVdaPending,
+    vdaApproved: assessment.vdaApproved,
+    modificationImplemented:
+      assessment.modificationImplemented,
+
+    createdAt: assessment.createdAt,
+    updatedAt: assessment.updatedAt,
+  }
+}
+
 export async function GET(
   _req: Request,
   {
@@ -92,6 +125,7 @@ export async function GET(
         parts: {
           include: {
             partNumber: true,
+            assessment: true,
             assignedTo: {
               select: {
                 id: true,
@@ -204,6 +238,7 @@ export async function GET(
                 id: true,
                 partNumber: true,
                 description: true,
+                vehicleProgram: true,
               },
             },
             changedBy: {
@@ -269,6 +304,10 @@ export async function GET(
 
       openingReason: risk.openingReason,
 
+      supplierId: risk.supplierId,
+
+      commodity: risk.commodity,
+
       workflowStatus: risk.workflowStatus,
       riskLevel: risk.riskLevel,
 
@@ -332,6 +371,8 @@ export async function GET(
               email: part.assignedTo.email,
             }
           : null,
+
+        assessment: formatAssessment(part.assessment),
       })),
 
       actionPlans: risk.actionPlans.map((plan) => ({
@@ -532,12 +573,15 @@ export async function GET(
       ),
     })
   } catch (error) {
-    console.error(error)
+    console.error("ERRO DETALHADO AO BUSCAR RM:", error)
 
     return NextResponse.json(
       {
-        error:
-          "Erro ao buscar detalhes da RM",
+        error: "Erro ao buscar detalhes da RM",
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     )

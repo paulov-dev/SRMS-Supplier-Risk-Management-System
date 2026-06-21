@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
@@ -121,6 +121,47 @@ type PartRiskStatus =
     | "GREY"
     | "BLUE"
 
+type RiskPartAssessment = {
+    id: string
+
+    isPartCanceled: boolean | null
+    hasDemand: boolean | null
+    sourceNamed: boolean | null
+
+    actionPlanReceived: boolean | null
+    scheduleMeetsDevelopment: boolean | null
+    technicalCommercialOk: boolean | null
+    productionRiskMitigated: boolean | null
+    eopManagementOk: boolean | null
+
+    deviationPfpFinished: boolean | null
+    onlyVdaPending: boolean | null
+    vdaApproved: boolean | null
+    modificationImplemented: boolean | null
+
+    createdAt: string
+    updatedAt: string
+}
+
+type AssessmentSelectValue = "true" | "false" | "null"
+
+type EditPartAssessmentForm = {
+    isPartCanceled: AssessmentSelectValue
+    hasDemand: AssessmentSelectValue
+    sourceNamed: AssessmentSelectValue
+
+    actionPlanReceived: AssessmentSelectValue
+    scheduleMeetsDevelopment: AssessmentSelectValue
+    technicalCommercialOk: AssessmentSelectValue
+    productionRiskMitigated: AssessmentSelectValue
+    eopManagementOk: AssessmentSelectValue
+
+    deviationPfpFinished: AssessmentSelectValue
+    onlyVdaPending: AssessmentSelectValue
+    vdaApproved: AssessmentSelectValue
+    modificationImplemented: AssessmentSelectValue
+}
+
 type LogisticsStatus =
     | "PENDING"
     | "APPROVED"
@@ -137,6 +178,7 @@ type RiskDetail = {
     title: string
     description: string | null
     openingReason: string
+    commodity: string | null
     workflowStatus: RiskWorkflowStatus
     riskLevel: RiskLevel
     createdWeek: number
@@ -190,6 +232,7 @@ type RiskDetail = {
             name: string
             email: string
         } | null
+        assessment: RiskPartAssessment | null
     }[]
 
     actionPlans: {
@@ -360,6 +403,7 @@ type EditPartForm = {
     description: string
     vehicleProgram: string
     reason: string
+    assessment: EditPartAssessmentForm
 }
 
 type RiskPartItem = RiskDetail["parts"][number]
@@ -409,6 +453,23 @@ const partStatusOptions: {
             description: "Concluído",
         },
     ]
+
+const emptyAssessmentForm: EditPartAssessmentForm = {
+    isPartCanceled: "null",
+    hasDemand: "null",
+    sourceNamed: "null",
+
+    actionPlanReceived: "null",
+    scheduleMeetsDevelopment: "null",
+    technicalCommercialOk: "null",
+    productionRiskMitigated: "null",
+    eopManagementOk: "null",
+
+    deviationPfpFinished: "null",
+    onlyVdaPending: "null",
+    vdaApproved: "null",
+    modificationImplemented: "null",
+}
 
 function toDateInputValue(value: string | null) {
     if (!value) return ""
@@ -621,6 +682,261 @@ function formatDateOnly(value: string | null) {
     }).format(new Date(value))
 }
 
+function getAssessmentPill(value: boolean | null | undefined) {
+    if (value === true) {
+        return (
+            <Pill backgroundColor="#16a34a">
+                Sim
+            </Pill>
+        )
+    }
+
+    if (value === false) {
+        return (
+            <Pill backgroundColor="#dc2626">
+                Não
+            </Pill>
+        )
+    }
+
+    return (
+        <Pill
+            backgroundColor="#e5e7eb"
+            color="#374151"
+            borderColor="#d1d5db"
+        >
+            N/A
+        </Pill>
+    )
+}
+
+function hasAssessmentData(
+    assessment: RiskPartAssessment | null
+) {
+    if (!assessment) return false
+
+    return [
+        assessment.isPartCanceled,
+        assessment.hasDemand,
+        assessment.sourceNamed,
+        assessment.actionPlanReceived,
+        assessment.scheduleMeetsDevelopment,
+        assessment.technicalCommercialOk,
+        assessment.productionRiskMitigated,
+        assessment.eopManagementOk,
+        assessment.deviationPfpFinished,
+        assessment.onlyVdaPending,
+        assessment.vdaApproved,
+        assessment.modificationImplemented,
+    ].some((value) => value !== null)
+}
+
+function getAssessmentItems(
+    assessment: RiskPartAssessment
+) {
+    return [
+        {
+            label: "PN cancelado?",
+            value: assessment.isPartCanceled,
+        },
+        {
+            label: "PN com demanda?",
+            value: assessment.hasDemand,
+        },
+        {
+            label: "Fonte nomeada?",
+            value: assessment.sourceNamed,
+        },
+        {
+            label: "Plano recebido?",
+            value: assessment.actionPlanReceived,
+        },
+        {
+            label: "Cronograma atende?",
+            value: assessment.scheduleMeetsDevelopment,
+        },
+        {
+            label: "Técnico/comercial OK?",
+            value: assessment.technicalCommercialOk,
+        },
+        {
+            label: "Risco mitigado?",
+            value: assessment.productionRiskMitigated,
+        },
+        {
+            label: "EOP OK?",
+            value: assessment.eopManagementOk,
+        },
+        {
+            label: "Desvio/PFP finalizado?",
+            value: assessment.deviationPfpFinished,
+        },
+        {
+            label: "Somente VDA pendente?",
+            value: assessment.onlyVdaPending,
+        },
+        {
+            label: "VDA aprovado?",
+            value: assessment.vdaApproved,
+        },
+        {
+            label: "Modificação implementada?",
+            value: assessment.modificationImplemented,
+        },
+    ]
+}
+
+function boolToAssessmentValue(
+    value: boolean | null | undefined
+): AssessmentSelectValue {
+    if (value === true) return "true"
+    if (value === false) return "false"
+
+    return "null"
+}
+
+function assessmentValueToBool(
+    value: AssessmentSelectValue
+) {
+    if (value === "true") return true
+    if (value === "false") return false
+
+    return null
+}
+
+function buildAssessmentForm(
+    assessment: RiskPartAssessment | null | undefined
+): EditPartAssessmentForm {
+    return {
+        isPartCanceled: boolToAssessmentValue(
+            assessment?.isPartCanceled
+        ),
+        hasDemand: boolToAssessmentValue(
+            assessment?.hasDemand
+        ),
+        sourceNamed: boolToAssessmentValue(
+            assessment?.sourceNamed
+        ),
+
+        actionPlanReceived: boolToAssessmentValue(
+            assessment?.actionPlanReceived
+        ),
+        scheduleMeetsDevelopment: boolToAssessmentValue(
+            assessment?.scheduleMeetsDevelopment
+        ),
+        technicalCommercialOk: boolToAssessmentValue(
+            assessment?.technicalCommercialOk
+        ),
+        productionRiskMitigated: boolToAssessmentValue(
+            assessment?.productionRiskMitigated
+        ),
+        eopManagementOk: boolToAssessmentValue(
+            assessment?.eopManagementOk
+        ),
+
+        deviationPfpFinished: boolToAssessmentValue(
+            assessment?.deviationPfpFinished
+        ),
+        onlyVdaPending: boolToAssessmentValue(
+            assessment?.onlyVdaPending
+        ),
+        vdaApproved: boolToAssessmentValue(
+            assessment?.vdaApproved
+        ),
+        modificationImplemented: boolToAssessmentValue(
+            assessment?.modificationImplemented
+        ),
+    }
+}
+
+function buildAssessmentPayload(
+    assessment: EditPartAssessmentForm
+) {
+    return {
+        isPartCanceled: assessmentValueToBool(
+            assessment.isPartCanceled
+        ),
+        hasDemand: assessmentValueToBool(
+            assessment.hasDemand
+        ),
+        sourceNamed: assessmentValueToBool(
+            assessment.sourceNamed
+        ),
+
+        actionPlanReceived: assessmentValueToBool(
+            assessment.actionPlanReceived
+        ),
+        scheduleMeetsDevelopment: assessmentValueToBool(
+            assessment.scheduleMeetsDevelopment
+        ),
+        technicalCommercialOk: assessmentValueToBool(
+            assessment.technicalCommercialOk
+        ),
+        productionRiskMitigated: assessmentValueToBool(
+            assessment.productionRiskMitigated
+        ),
+        eopManagementOk: assessmentValueToBool(
+            assessment.eopManagementOk
+        ),
+
+        deviationPfpFinished: assessmentValueToBool(
+            assessment.deviationPfpFinished
+        ),
+        onlyVdaPending: assessmentValueToBool(
+            assessment.onlyVdaPending
+        ),
+        vdaApproved: assessmentValueToBool(
+            assessment.vdaApproved
+        ),
+        modificationImplemented: assessmentValueToBool(
+            assessment.modificationImplemented
+        ),
+    }
+}
+
+function AssessmentSelectField({
+    label,
+    value,
+    onChange,
+}: {
+    label: string
+    value: AssessmentSelectValue
+    onChange: (value: AssessmentSelectValue) => void
+}) {
+    return (
+        <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+                {label}
+            </Label>
+
+            <Select
+                value={value}
+                onValueChange={(newValue) =>
+                    onChange(newValue as AssessmentSelectValue)
+                }
+            >
+                <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+
+                <SelectContent>
+                    <SelectItem value="null">
+                        N/A
+                    </SelectItem>
+
+                    <SelectItem value="true">
+                        Sim
+                    </SelectItem>
+
+                    <SelectItem value="false">
+                        Não
+                    </SelectItem>
+                </SelectContent>
+            </Select>
+        </div>
+    )
+}
+
 export default function RiskDetailPage() {
     const router = useRouter()
     const params = useParams<{
@@ -685,6 +1001,7 @@ export default function RiskDetailPage() {
             description: "",
             vehicleProgram: "",
             reason: "",
+            assessment: emptyAssessmentForm,
         })
 
     const [partSuggestions, setPartSuggestions] = useState<
@@ -918,6 +1235,7 @@ export default function RiskDetailPage() {
             vehicleProgram:
                 part.partNumber.vehicleProgram || "",
             reason: "",
+            assessment: buildAssessmentForm(part.assessment),
         })
 
         setEditPartOpen(true)
@@ -932,6 +1250,7 @@ export default function RiskDetailPage() {
             description: "",
             vehicleProgram: "",
             reason: "",
+            assessment: emptyAssessmentForm,
         })
     }
 
@@ -964,12 +1283,16 @@ export default function RiskDetailPage() {
                             editPartForm.description.trim() || null,
                         vehicleProgram:
                             editPartForm.vehicleProgram.trim() || null,
+                        assessment: buildAssessmentPayload(
+                            editPartForm.assessment
+                        ),
                         reason: editPartForm.reason.trim(),
                     }),
                 }
             )
 
             const data = await res.json()
+
 
             if (!res.ok) {
                 throw new Error(
@@ -1621,6 +1944,18 @@ export default function RiskDetailPage() {
                                                 <div className="grid gap-6 md:grid-cols-2">
                                                     <div className="space-y-2">
                                                         <p className="text-sm text-muted-foreground">
+                                                            Commodity
+                                                        </p>
+
+                                                        <p className="font-medium">
+                                                            {risk.commodity || "-"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid gap-6 md:grid-cols-2">
+                                                    <div className="space-y-2">
+                                                        <p className="text-sm text-muted-foreground">
                                                             Criada por
                                                         </p>
 
@@ -1737,71 +2072,75 @@ export default function RiskDetailPage() {
 
                                                             <tbody>
                                                                 {risk.parts.map((part) => (
-                                                                    <tr
-                                                                        key={part.id}
-                                                                        className="border-b last:border-0"
-                                                                    >
-                                                                        <td className="px-4 py-3 font-medium">
-                                                                            {part.partNumber.partNumber}
-                                                                        </td>
-
-                                                                        <td className="px-4 py-3">
-                                                                            {part.partNumber.description || "-"}
-                                                                        </td>
-
-                                                                        <td className="px-4 py-3">
-                                                                            {part.partNumber.vehicleProgram || "-"}
-                                                                        </td>
-
-                                                                        <td className="px-4 py-3">
-                                                                            {getPartStatusPill(part.status)}
-                                                                        </td>
-
-                                                                        <td className="px-4 py-3">
-                                                                            <Badge variant="outline">
-                                                                                {part.logisticsStatus}
-                                                                            </Badge>
-                                                                        </td>
-
-                                                                        <td className="px-4 py-3">
-                                                                            {part.assignedTo?.name || "-"}
-                                                                        </td>
-
-                                                                        {risk.workflowStatus === "OPEN" && (
-                                                                            <td className="px-4 py-3 text-right">
-                                                                                <div className="flex justify-end gap-2">
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        variant="outline"
-                                                                                        size="sm"
-                                                                                        onClick={() =>
-                                                                                            openEditPartDialog(part)
-                                                                                        }
-                                                                                    >
-                                                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                                                        Editar
-                                                                                    </Button>
-
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        variant="outline"
-                                                                                        size="sm"
-                                                                                        onClick={() =>
-                                                                                            handleRemovePart(part)
-                                                                                        }
-                                                                                        disabled={removingPartId === part.id}
-                                                                                    >
-                                                                                        {removingPartId === part.id ? (
-                                                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                                                        ) : (
-                                                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                                                        )}
-                                                                                        Remover
-                                                                                    </Button>
-                                                                                </div>
+                                                                    <Fragment key={part.id}>
+                                                                        <tr
+                                                                            key={part.id}
+                                                                            className="border-b last:border-0"
+                                                                        >
+                                                                            <td className="px-4 py-3 font-medium">
+                                                                                {part.partNumber.partNumber}
                                                                             </td>
-                                                                        )}
-                                                                    </tr>
+
+                                                                            <td className="px-4 py-3">
+                                                                                {part.partNumber.description || "-"}
+                                                                            </td>
+
+                                                                            <td className="px-4 py-3">
+                                                                                {part.partNumber.vehicleProgram || "-"}
+                                                                            </td>
+
+                                                                            <td className="px-4 py-3">
+                                                                                {getPartStatusPill(part.status)}
+                                                                            </td>
+
+                                                                            <td className="px-4 py-3">
+                                                                                <Badge variant="outline">
+                                                                                    {part.logisticsStatus}
+                                                                                </Badge>
+                                                                            </td>
+
+                                                                            <td className="px-4 py-3">
+                                                                                {part.assignedTo?.name || "-"}
+                                                                            </td>
+
+                                                                            {risk.workflowStatus === "OPEN" && (
+                                                                                <td className="px-4 py-3 text-right">
+                                                                                    <div className="flex justify-end gap-2">
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            onClick={() =>
+                                                                                                openEditPartDialog(part)
+                                                                                            }
+                                                                                        >
+                                                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                                                            Editar
+                                                                                        </Button>
+
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            onClick={() =>
+                                                                                                handleRemovePart(part)
+                                                                                            }
+                                                                                            disabled={removingPartId === part.id}
+                                                                                        >
+                                                                                            {removingPartId === part.id ? (
+                                                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                                            ) : (
+                                                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                                            )}
+                                                                                            Remover
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </td>
+                                                                            )}
+                                                                        </tr>
+
+                                                                        
+                                                                    </Fragment>
                                                                 ))}
                                                             </tbody>
                                                         </table>
@@ -2712,6 +3051,200 @@ export default function RiskDetailPage() {
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-lg border p-4 space-y-4">
+                                                    <div>
+                                                        <p className="text-sm font-medium">
+                                                            Checklist de risco do PN
+                                                        </p>
+
+                                                        <p className="mt-1 text-xs text-muted-foreground">
+                                                            As respostas abaixo podem recalcular automaticamente o status do PN.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                                        <AssessmentSelectField
+                                                            label="PN cancelado?"
+                                                            value={editPartForm.assessment.isPartCanceled}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        isPartCanceled: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="PN com demanda?"
+                                                            value={editPartForm.assessment.hasDemand}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        hasDemand: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Fonte nomeada?"
+                                                            value={editPartForm.assessment.sourceNamed}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        sourceNamed: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Plano recebido?"
+                                                            value={editPartForm.assessment.actionPlanReceived}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        actionPlanReceived: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Cronograma atende?"
+                                                            value={
+                                                                editPartForm.assessment
+                                                                    .scheduleMeetsDevelopment
+                                                            }
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        scheduleMeetsDevelopment: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Técnico/comercial OK?"
+                                                            value={editPartForm.assessment.technicalCommercialOk}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        technicalCommercialOk: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Risco produção mitigado?"
+                                                            value={
+                                                                editPartForm.assessment
+                                                                    .productionRiskMitigated
+                                                            }
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        productionRiskMitigated: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="EOP OK?"
+                                                            value={editPartForm.assessment.eopManagementOk}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        eopManagementOk: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Desvio/PFP finalizado?"
+                                                            value={
+                                                                editPartForm.assessment
+                                                                    .deviationPfpFinished
+                                                            }
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        deviationPfpFinished: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Somente VDA pendente?"
+                                                            value={editPartForm.assessment.onlyVdaPending}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        onlyVdaPending: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="VDA aprovado?"
+                                                            value={editPartForm.assessment.vdaApproved}
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        vdaApproved: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+
+                                                        <AssessmentSelectField
+                                                            label="Modificação implementada?"
+                                                            value={
+                                                                editPartForm.assessment
+                                                                    .modificationImplemented
+                                                            }
+                                                            onChange={(value) =>
+                                                                setEditPartForm((prev) => ({
+                                                                    ...prev,
+                                                                    assessment: {
+                                                                        ...prev.assessment,
+                                                                        modificationImplemented: value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
                                                     </div>
                                                 </div>
 

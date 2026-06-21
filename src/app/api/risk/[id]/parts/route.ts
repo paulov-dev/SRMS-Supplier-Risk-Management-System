@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
+
 import {
   PartRiskStatus,
   Prisma,
+  RiskLevel,
   RiskPartLogisticsStatus,
 } from "@prisma/client"
 
@@ -88,6 +90,54 @@ function formatRiskPart(part: any) {
         }
       : null,
   }
+}
+
+function calculateRiskLevelFromPartStatuses(
+  statuses: PartRiskStatus[]
+): RiskLevel {
+  if (statuses.includes(PartRiskStatus.RED)) {
+    return RiskLevel.RED
+  }
+
+  if (statuses.includes(PartRiskStatus.YELLOW)) {
+    return RiskLevel.YELLOW
+  }
+
+  if (statuses.includes(PartRiskStatus.GREEN)) {
+    return RiskLevel.GREEN
+  }
+
+  return RiskLevel.YELLOW
+}
+
+async function recalculateRiskEventLevel(
+  tx: Prisma.TransactionClient,
+  riskEventId: string
+) {
+  const parts = await tx.riskEventPart.findMany({
+    where: {
+      riskEventId,
+    },
+    select: {
+      status: true,
+    },
+  })
+
+  const statuses = parts.map((part) => part.status)
+
+  const nextRiskLevel =
+    calculateRiskLevelFromPartStatuses(statuses)
+
+  await tx.riskEvent.update({
+    where: {
+      id: riskEventId,
+    },
+    data: {
+      riskLevel: nextRiskLevel,
+    },
+  })
+
+  return nextRiskLevel
 }
 
 export async function GET(
@@ -405,6 +455,8 @@ export async function POST(
             }),
           },
         })
+
+        await recalculateRiskEventLevel(tx, risk.id)
 
         return createdRiskPart
       }

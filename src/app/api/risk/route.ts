@@ -135,6 +135,8 @@ function formatRiskItem(risk: any) {
 
     openingReason: risk.openingReason,
 
+    commodity: risk.commodity,
+
     workflowStatus: risk.workflowStatus,
     riskLevel: risk.riskLevel,
 
@@ -274,6 +276,12 @@ export async function GET(req: Request) {
         },
         {
           description: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          commodity: {
             contains: search,
             mode: "insensitive",
           },
@@ -520,10 +528,12 @@ export async function POST(req: Request) {
         ? body.assignedToId.trim()
         : ""
 
-    const riskLevel =
-      typeof body.riskLevel === "string"
-        ? body.riskLevel.trim()
-        : "GREEN"
+    const commodity =
+      typeof body.commodity === "string"
+        ? body.commodity.trim()
+        : ""
+
+    const riskLevel = "YELLOW"
 
     if (!supplierId) {
       return NextResponse.json(
@@ -544,18 +554,6 @@ export async function POST(req: Request) {
         {
           error:
             "Motivo de abertura inválido ou não informado",
-        },
-        { status: 400 }
-      )
-    }
-
-    if (
-      riskLevel &&
-      !allowedRiskLevels.includes(riskLevel as any)
-    ) {
-      return NextResponse.json(
-        {
-          error: "Farol da RM inválido",
         },
         { status: 400 }
       )
@@ -623,27 +621,53 @@ export async function POST(req: Request) {
 
     const createdRisk =
       await prisma.$transaction(async (tx) => {
-        const sequence = await tx.riskSequence.upsert({
-          where: {
-            key: "RISK_EVENT",
-          },
-          create: {
-            key: "RISK_EVENT",
-            currentNumber: 1,
-          },
-          update: {
-            currentNumber: {
-              increment: 1,
-            },
-          },
-        })
+        const lastRisk = await tx.riskEvent.findFirst({
+  orderBy: {
+    sequenceNumber: "desc",
+  },
+  select: {
+    sequenceNumber: true,
+  },
+})
 
-        const sequenceNumber =
-          sequence.currentNumber
+    const currentSequence =
+      await tx.riskSequence.findUnique({
+        where: {
+          key: "RISK_EVENT",
+        },
+        select: {
+          currentNumber: true,
+        },
+      })
 
-        const code = `${codePrefix}${String(
-          sequenceNumber
-        ).padStart(3, "0")}`
+    const nextFromSequence = currentSequence
+      ? currentSequence.currentNumber + 1
+      : 1
+
+    const nextFromRisk =
+      (lastRisk?.sequenceNumber ?? 0) + 1
+
+    const sequenceNumber = Math.max(
+      nextFromSequence,
+      nextFromRisk
+    )
+
+    await tx.riskSequence.upsert({
+      where: {
+        key: "RISK_EVENT",
+      },
+      create: {
+        key: "RISK_EVENT",
+        currentNumber: sequenceNumber,
+      },
+      update: {
+        currentNumber: sequenceNumber,
+      },
+    })
+
+    const code = `${codePrefix}${String(
+      sequenceNumber
+    ).padStart(3, "0")}`
 
         const risk = await tx.riskEvent.create({
           data: {
@@ -661,6 +685,8 @@ export async function POST(req: Request) {
             openingReason: openingReason as any,
 
             supplierId: supplier.id,
+
+            commodity: commodity || null,
 
             workflowStatus: "OPEN",
             riskLevel: riskLevel as any,
@@ -733,6 +759,8 @@ export async function POST(req: Request) {
 
               supplierId: risk.supplierId,
               supplierName: supplier.name,
+
+              commodity: risk.commodity,
 
               workflowStatus:
                 risk.workflowStatus,

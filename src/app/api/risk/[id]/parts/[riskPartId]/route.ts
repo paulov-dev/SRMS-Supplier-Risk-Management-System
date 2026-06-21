@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import {
   PartRiskStatus,
   Prisma,
+  RiskLevel,
   RiskPartHistoryType,
   RiskPartLogisticsStatus,
 } from "@prisma/client"
@@ -26,7 +27,8 @@ function getRiskPartHistoryType(changedFields: string[]) {
     changedFields.includes("assignedToId")
   const hasData =
     changedFields.includes("description") ||
-    changedFields.includes("vehicleProgram")
+    changedFields.includes("vehicleProgram") ||
+    changedFields.includes("assessment")
 
   const totalTypes = [
     hasStatus,
@@ -122,7 +124,275 @@ function formatRiskPart(part: any) {
           email: part.assignedTo.email,
         }
       : null,
+
+        aassessment: part.assessment
+      ? {
+          id: part.assessment.id,
+
+          isPartCanceled:
+            part.assessment.isPartCanceled,
+          hasDemand: part.assessment.hasDemand,
+          sourceNamed: part.assessment.sourceNamed,
+
+          actionPlanReceived:
+            part.assessment.actionPlanReceived,
+          scheduleMeetsDevelopment:
+            part.assessment.scheduleMeetsDevelopment,
+          technicalCommercialOk:
+            part.assessment.technicalCommercialOk,
+          productionRiskMitigated:
+            part.assessment.productionRiskMitigated,
+          eopManagementOk:
+            part.assessment.eopManagementOk,
+
+          deviationPfpFinished:
+            part.assessment.deviationPfpFinished,
+          onlyVdaPending:
+            part.assessment.onlyVdaPending,
+          vdaApproved:
+            part.assessment.vdaApproved,
+          modificationImplemented:
+            part.assessment.modificationImplemented,
+
+          createdAt: part.assessment.createdAt,
+          updatedAt: part.assessment.updatedAt,
+        }
+      : null,
   }
+}
+
+const assessmentKeys = [
+  "isPartCanceled",
+  "hasDemand",
+  "sourceNamed",
+  "actionPlanReceived",
+  "scheduleMeetsDevelopment",
+  "technicalCommercialOk",
+  "productionRiskMitigated",
+  "eopManagementOk",
+  "deviationPfpFinished",
+  "onlyVdaPending",
+  "vdaApproved",
+  "modificationImplemented",
+] as const
+
+type AssessmentKey = typeof assessmentKeys[number]
+
+type AssessmentValues = Partial<
+  Record<AssessmentKey, boolean | null>
+>
+
+function normalizeAssessmentValue(value: unknown) {
+  if (value === true) return true
+  if (value === false) return false
+  if (value === null) return null
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+
+    if (
+      normalized === "" ||
+      normalized === "na" ||
+      normalized === "n/a" ||
+      normalized === "null"
+    ) {
+      return null
+    }
+
+    if (
+      normalized === "sim" ||
+      normalized === "yes" ||
+      normalized === "true"
+    ) {
+      return true
+    }
+
+    if (
+      normalized === "não" ||
+      normalized === "nao" ||
+      normalized === "no" ||
+      normalized === "false"
+    ) {
+      return false
+    }
+  }
+
+  return undefined
+}
+
+function buildAssessmentData(payload: unknown) {
+  const data: AssessmentValues = {}
+
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
+  ) {
+    return data
+  }
+
+  const source = payload as Record<string, unknown>
+
+  for (const key of assessmentKeys) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        source,
+        key
+      )
+    ) {
+      const value = normalizeAssessmentValue(
+        source[key]
+      )
+
+      if (value !== undefined) {
+        data[key] = value
+      }
+    }
+  }
+
+  return data
+}
+
+function buildMergedAssessment(
+  currentAssessment: any,
+  changes: AssessmentValues
+) {
+  const merged: Record<
+    AssessmentKey,
+    boolean | null
+  > = {} as Record<AssessmentKey, boolean | null>
+
+  for (const key of assessmentKeys) {
+    merged[key] =
+      Object.prototype.hasOwnProperty.call(
+        changes,
+        key
+      )
+        ? changes[key] ?? null
+        : currentAssessment?.[key] ?? null
+  }
+
+  return merged
+}
+
+function assessmentToJson(assessment: any) {
+  if (!assessment) return null
+
+  return {
+    isPartCanceled: assessment.isPartCanceled,
+    hasDemand: assessment.hasDemand,
+    sourceNamed: assessment.sourceNamed,
+
+    actionPlanReceived:
+      assessment.actionPlanReceived,
+    scheduleMeetsDevelopment:
+      assessment.scheduleMeetsDevelopment,
+    technicalCommercialOk:
+      assessment.technicalCommercialOk,
+    productionRiskMitigated:
+      assessment.productionRiskMitigated,
+    eopManagementOk: assessment.eopManagementOk,
+
+    deviationPfpFinished:
+      assessment.deviationPfpFinished,
+    onlyVdaPending: assessment.onlyVdaPending,
+    vdaApproved: assessment.vdaApproved,
+    modificationImplemented:
+      assessment.modificationImplemented,
+  }
+}
+
+function calculatePartStatusFromAssessment(
+  assessment: Record<AssessmentKey, boolean | null>
+): PartRiskStatus {
+  // 1. Cinza: PN cancelado
+  if (assessment.isPartCanceled === true) {
+    return PartRiskStatus.GREY
+  }
+
+  // 2. Laranja: PN sem demanda
+  if (assessment.hasDemand === false) {
+    return PartRiskStatus.ORANGE
+  }
+
+  // 3. Vermelho: falhas críticas de fonte/plano/cronograma
+  if (
+    assessment.sourceNamed === false ||
+    assessment.actionPlanReceived === false ||
+    assessment.scheduleMeetsDevelopment === false
+  ) {
+    return PartRiskStatus.RED
+  }
+
+  // 4. Amarelo: pendências técnicas, produção, EOP, desvio/PFP ou VDA
+  if (
+    assessment.technicalCommercialOk === false ||
+    assessment.productionRiskMitigated === false ||
+    assessment.eopManagementOk === false ||
+    assessment.deviationPfpFinished === false ||
+    assessment.onlyVdaPending === false
+  ) {
+    return PartRiskStatus.YELLOW
+  }
+
+  // 5. Verde: VDA aprovado ou modificação implementada
+  if (
+    assessment.vdaApproved === true ||
+    assessment.modificationImplemented === true
+  ) {
+    return PartRiskStatus.GREEN
+  }
+
+  // 6. Azul: concluído / sem pendência aplicável
+  return PartRiskStatus.BLUE
+}
+
+function calculateRiskLevelFromPartStatuses(
+  statuses: PartRiskStatus[]
+): RiskLevel {
+  if (statuses.includes(PartRiskStatus.RED)) {
+    return RiskLevel.RED
+  }
+
+  if (statuses.includes(PartRiskStatus.YELLOW)) {
+    return RiskLevel.YELLOW
+  }
+
+  if (statuses.includes(PartRiskStatus.GREEN)) {
+    return RiskLevel.GREEN
+  }
+
+  return RiskLevel.YELLOW
+}
+
+async function recalculateRiskEventLevel(
+  tx: Prisma.TransactionClient,
+  riskEventId: string
+) {
+  const parts = await tx.riskEventPart.findMany({
+    where: {
+      riskEventId,
+    },
+    select: {
+      status: true,
+    },
+  })
+
+  const statuses = parts.map((part) => part.status)
+
+  const nextRiskLevel =
+    calculateRiskLevelFromPartStatuses(statuses)
+
+  await tx.riskEvent.update({
+    where: {
+      id: riskEventId,
+    },
+    data: {
+      riskLevel: nextRiskLevel,
+    },
+  })
+
+  return nextRiskLevel
 }
 
 export async function PATCH(
@@ -162,6 +432,8 @@ export async function PATCH(
         { status: 403 }
       )
     }
+
+
 
     const { id, riskPartId } = await params
 
@@ -203,6 +475,7 @@ export async function PATCH(
         },
         include: {
           partNumber: true,
+          assessment: true,
           assignedTo: {
             select: {
               id: true,
@@ -259,6 +532,12 @@ export async function PATCH(
       | string
       | null
       | undefined = undefined
+
+    let assessmentData: AssessmentValues = {}
+
+    let mergedAssessmentForStatus:
+      | Record<AssessmentKey, boolean | null>
+      | null = null
 
     if (
       typeof body.status === "string" &&
@@ -415,15 +694,71 @@ export async function PATCH(
       }
     }
 
+    if (
+  Object.prototype.hasOwnProperty.call(
+    body,
+    "assessment"
+  )
+) {
+  assessmentData = buildAssessmentData(
+    body.assessment
+  )
+
+  if (Object.keys(assessmentData).length > 0) {
+    mergedAssessmentForStatus =
+      buildMergedAssessment(
+        currentRiskPart.assessment,
+        assessmentData
+      )
+
+    oldFields.assessment =
+      assessmentToJson(
+        currentRiskPart.assessment
+      ) as Prisma.InputJsonValue | null
+
+    newFields.assessment =
+      mergedAssessmentForStatus as Prisma.InputJsonValue
+
+    changedFields.push("assessment")
+
+    const calculatedStatus =
+      calculatePartStatusFromAssessment(
+        mergedAssessmentForStatus
+      )
+
+    if (
+      calculatedStatus !==
+      currentRiskPart.status
+    ) {
+      riskPartUpdateData.status =
+        calculatedStatus
+
+      oldFields.status =
+        currentRiskPart.status
+      newFields.status = calculatedStatus
+
+      if (!changedFields.includes("status")) {
+        changedFields.push("status")
+      }
+
+      newStatus = calculatedStatus
+    }
+  }
+}
+
     const hasRiskPartChanges =
       Object.keys(riskPartUpdateData).length > 0
 
     const hasPartNumberChanges =
       Object.keys(partNumberUpdateData).length > 0
 
+    const hasAssessmentChanges =
+      Object.keys(assessmentData).length > 0
+
     if (
       !hasRiskPartChanges &&
-      !hasPartNumberChanges
+      !hasPartNumberChanges &&
+      !hasAssessmentChanges
     ) {
       return NextResponse.json(
         {
@@ -455,51 +790,47 @@ export async function PATCH(
 
     const ipAddress = getRequestIp(req)
 
-    const updatedRiskPart =
-      await prisma.$transaction(async (tx) => {
-        if (hasPartNumberChanges) {
-          await tx.partNumber.update({
+      const updatedRiskPart =
+        await prisma.$transaction(async (tx) => {
+          if (hasAssessmentChanges) {
+          await tx.riskPartAssessment.upsert({
             where: {
-              id: currentRiskPart.partNumberId,
+              riskEventPartId: currentRiskPart.id,
             },
-            data: partNumberUpdateData,
+            create: {
+              riskEventPartId: currentRiskPart.id,
+              ...assessmentData,
+            },
+            update: assessmentData,
           })
         }
 
-        const updated =
-          hasRiskPartChanges
-            ? await tx.riskEventPart.update({
-                where: {
-                  id: currentRiskPart.id,
-                },
-                data: riskPartUpdateData,
-                include: {
-                  partNumber: true,
-                  assignedTo: {
-                    select: {
-                      id: true,
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              })
-            : await tx.riskEventPart.findUniqueOrThrow({
-                where: {
-                  id: currentRiskPart.id,
-                },
-                include: {
-                  partNumber: true,
-                  assignedTo: {
-                    select: {
-                      id: true,
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              })
+          if (hasRiskPartChanges) {
+    await tx.riskEventPart.update({
+      where: {
+        id: currentRiskPart.id,
+      },
+      data: riskPartUpdateData,
+    })
+  }
 
+  const updated =
+    await tx.riskEventPart.findUniqueOrThrow({
+      where: {
+        id: currentRiskPart.id,
+      },
+      include: {
+        partNumber: true,
+        assessment: true,
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    })
         const history =
           await tx.riskEventPartHistory.create({
             data: {
@@ -599,6 +930,10 @@ export async function PATCH(
           },
         })
 
+        if (hasRiskPartChanges || hasAssessmentChanges) {
+          await recalculateRiskEventLevel(tx, risk.id)
+        }
+
         return updated
       })
 
@@ -696,6 +1031,7 @@ export async function DELETE(
         },
         include: {
           partNumber: true,
+          assessment: true,
           assignedTo: {
             select: {
               id: true,
@@ -784,6 +1120,8 @@ export async function DELETE(
           }),
         },
       })
+
+await recalculateRiskEventLevel(tx, risk.id)
     })
 
     return NextResponse.json({

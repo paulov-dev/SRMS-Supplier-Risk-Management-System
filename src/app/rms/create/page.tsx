@@ -75,7 +75,7 @@ type FormState = {
   supplierId: string
   openingReason: OpeningReason | ""
   assignedToId: string
-  riskLevel: RiskLevel
+  commodity: string
   title: string
   description: string
 }
@@ -102,33 +102,21 @@ const openingReasonOptions: {
     },
   ]
 
-const riskLevelOptions: {
-  value: RiskLevel
-  label: string
-  description: string
-}[] = [
-  {
-    value: "GREEN",
-    label: "Green",
-    description: "Controlado",
-  },
-  {
-    value: "YELLOW",
-    label: "Yellow",
-    description: "Atenção",
-  },
-  {
-    value: "RED",
-    label: "Red",
-    description: "Crítico",
-  },
+const commodityOptions = [
+  "ELE/QUI",
+  "MET",
+  "PWT",
+  "CAB",
+  "CHA",
+  "MOT",
+  "OUTROS",
 ]
 
 const initialForm: FormState = {
   supplierId: "",
   openingReason: "",
   assignedToId: "",
-  riskLevel: "GREEN",
+  commodity: "",
   title: "",
   description: "",
 }
@@ -237,11 +225,6 @@ export default function CreateRiskPage() {
         "Selecione o responsável pela RM."
     }
 
-    if (!form.riskLevel) {
-      newErrors.riskLevel =
-        "Selecione o farol da RM."
-    }
-
     setErrors(newErrors)
 
     if (Object.keys(newErrors).length > 0) {
@@ -271,7 +254,7 @@ export default function CreateRiskPage() {
           supplierId: form.supplierId,
           openingReason: form.openingReason,
           assignedToId: form.assignedToId,
-          riskLevel: form.riskLevel,
+          commodity: form.commodity.trim() || null,
           title: form.title.trim() || null,
           description:
             form.description.trim() || null,
@@ -286,11 +269,14 @@ export default function CreateRiskPage() {
         )
       }
 
+      const createdRisk = data.data || data
+
       toast.success(
-        `RM ${data.code} criada com sucesso`
+        `RM ${createdRisk.code} criada com sucesso`
       )
 
-      router.push(`/rms/${data.id}`)
+      router.push(`/rms/${createdRisk.id}`)
+
     } catch (error) {
       console.error(error)
 
@@ -534,7 +520,7 @@ export default function CreateRiskPage() {
                         </div>
                       </div>
 
-            
+
                       <div className="grid gap-6 md:grid-cols-2">
                         <div className="space-y-2.5">
                           <Label>
@@ -542,7 +528,7 @@ export default function CreateRiskPage() {
                             <span className="ml-1 text-red-500 p-2">*</span>
                           </Label>
 
-                          <Select                          
+                          <Select
                             value={form.openingReason}
                             onValueChange={(value) => {
                               setForm((prev) => ({
@@ -583,57 +569,44 @@ export default function CreateRiskPage() {
                               {errors.openingReason}
                             </p>
                           )}
-                        </div>
+                        </div>                      
+                      </div>
 
-                        <div className="space-y-2.5">
-                          <Label>
-                            Farol da RM
-                            <span className="ml-1 text-red-500 p-2">*</span>
-                          </Label>
 
-                          <Select
-                            value={form.riskLevel}
-                            onValueChange={(value) => {
-                              setForm((prev) => ({
-                                ...prev,
-                                riskLevel:
-                                  value as RiskLevel,
-                              }))
+                      <div className="space-y-2.5">
+                        <Label htmlFor="title" className="p-2">
+                          Commodity
+                        </Label>
 
-                              clearError("riskLevel")
-                            }}
-                          >
-                            <SelectTrigger
-                              className={
-                                errors.riskLevel
-                                  ? "border-red-500 focus:ring-red-500"
-                                  : ""
-                              }
-                            >
-                              <SelectValue placeholder="Selecione o farol" />
-                            </SelectTrigger>
+                        <Select
+                          value={form.commodity || "none"}
+                          onValueChange={(value) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              commodity:
+                                value === "none" ? "" : value,
+                            }))
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a commodity" />
+                          </SelectTrigger>
 
-                            <SelectContent>
-                              {riskLevelOptions.map(
-                                (level) => (
-                                  <SelectItem
-                                    key={level.value}
-                                    value={level.value}
-                                  >
-                                    {level.label} —{" "}
-                                    {level.description}
-                                  </SelectItem>
-                                )
-                              )}
-                            </SelectContent>
-                          </Select>
+                          <SelectContent>
+                            <SelectItem value="none">
+                              Não informado
+                            </SelectItem>
 
-                          {errors.riskLevel && (
-                            <p className="text-xs text-red-500">
-                              {errors.riskLevel}
-                            </p>
-                          )}
-                        </div>
+                            {commodityOptions.map((commodity) => (
+                              <SelectItem
+                                key={commodity}
+                                value={commodity}
+                              >
+                                {commodity}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="space-y-2.5">
@@ -728,14 +701,16 @@ export default function CreateRiskPage() {
 
                       <div>
                         <p className="text-sm text-muted-foreground">
-                          Farol selecionado
+                          Farol inicial
                         </p>
 
                         <div className="mt-2">
-                          {getRiskLevelBadge(
-                            form.riskLevel
-                          )}
+                          {getRiskLevelBadge("YELLOW")}
                         </div>
+
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Definido automaticamente pelo sistema.
+                        </p>
                       </div>
 
                       <div>
@@ -747,6 +722,16 @@ export default function CreateRiskPage() {
                           {selectedSupplier
                             ? selectedSupplier.name
                             : "Nenhum fornecedor selecionado"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Commodity
+                        </p>
+
+                        <p className="mt-1 text-sm font-medium">
+                          {form.commodity || "-"}
                         </p>
                       </div>
 
