@@ -63,14 +63,7 @@ export function SiteHeader() {
 
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-          >
-            GitHub
-          </Button>
-        </div>
+
 
       </div>
     </header>

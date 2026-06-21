@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+
 import {
   IconDashboard,
   IconDatabase,
@@ -90,9 +91,9 @@ export function AppSidebar({
 
   const data = {
     user: {
-      name: user?.name || "Paulo Ferraz",
-      email: user?.email || "m@example.com",
-      avatar: "/avatars/shadcn.jpg",
+      name: user?.name || "Usuário SRMS",
+      email: user?.email || "usuario@srms.com",
+      avatar: "",
     },
 
     navMain: [
@@ -103,16 +104,22 @@ export function AppSidebar({
         permission: "DASHBOARD_VIEW",
       },
       {
-        title: "RMs",
+        title: "Risk Management",
         url: "/rms",
         icon: IconListDetails,
         permission: "RISK_VIEW",
-      },      
-      {
-        title: "Usuários",
-        url: "/users",
-        icon: IconUsers,
-        permission: "USER_MANAGE",
+        items: [
+          {
+            title: "Todas as RMs",
+            url: "/rms",
+            permission: "RISK_VIEW",
+          },
+          {
+            title: "Nova RM",
+            url: "/rms/create",
+            permission: "RISK_CREATE",
+          },
+        ],
       },
       {
         title: "Fornecedores",
@@ -121,19 +128,25 @@ export function AppSidebar({
         permission: "SUPPLIER_VIEW",
       },
       {
-        title: "Admin",
+        title: "Usuários",
+        url: "/users",
+        icon: IconUsers,
+        permission: "USER_MANAGE",
+      },
+      {
+        title: "Administração",
         url: "#",
         icon: IconUserHexagon,
-        permission: ["MANAGE_USERS", "AUDIT_LOG_VIEW"],
+        permission: ["USER_MANAGE", "AUDIT_LOG_VIEW"],
         items: [
           {
-            title: "Roles",
+            title: "Perfis e permissões",
             url: "/admin/roles",
             icon: IconShieldLock,
             permission: "USER_MANAGE",
           },
           {
-            title: "Audit Logs",
+            title: "Auditoria",
             url: "/admin/audit-logs",
             icon: IconHistory,
             permission: "AUDIT_LOG_VIEW",
@@ -144,35 +157,35 @@ export function AppSidebar({
 
     navSecondary: [
       {
-        title: "Settings",
+        title: "Configurações",
         url: "#",
         icon: IconSettings,
       },
       {
-        title: "Get Help",
+        title: "Ajuda",
         url: "#",
         icon: IconHelp,
       },
       {
-        title: "Search",
-        url: "#",
+        title: "Buscar RM",
+        url: "/rms",
         icon: IconSearch,
       },
     ],
 
     documents: [
       {
-        name: "Data Library",
-        url: "#",
-        icon: IconDatabase,
-      },
-      {
-        name: "Reports",
+        name: "Relatórios SRMS",
         url: "#",
         icon: IconReport,
       },
       {
-        name: "Word Assistant",
+        name: "Base de dados",
+        url: "#",
+        icon: IconDatabase,
+      },
+      {
+        name: "Procedimentos",
         url: "#",
         icon: IconFileWord,
       },
@@ -194,11 +207,19 @@ export function AppSidebar({
                 href="/dashboard"
                 className="flex items-center gap-2"
               >
-                <IconInnerShadowTop className="size-5!" />
+                <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <IconInnerShadowTop className="size-5!" />
+                </div>
 
-                <span className="text-base font-semibold">
-                  SRMS | Supplier Risk Management System
-                </span>
+                <div className="grid flex-1 text-left leading-tight">
+                  <span className="text-sm font-semibold">
+                    SRMS
+                  </span>
+
+                  <span className="text-xs text-muted-foreground">
+                    Supplier Risk Management
+                  </span>
+                </div>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
