@@ -1,10 +1,18 @@
 import { PrismaClient } from "@prisma/client"
 import * as XLSX from "xlsx"
+import * as fs from "fs"
 import path from "path"
+
+// Necessário para XLSX.readFile funcionar corretamente em ESM
+XLSX.set_fs(fs)
 
 const prisma = new PrismaClient()
 
 type ExcelRow = Record<string, any>
+
+// ======================================================
+// ARQUIVOS
+// ======================================================
 
 const ACTIVE_FILE = path.join(
   process.cwd(),
@@ -20,18 +28,31 @@ const CLOSED_FILE = path.join(
   "RISK MANAGEMENT PLAN - Concluidos.xlsx"
 )
 
+// ======================================================
+// LEITURA DO EXCEL
+// ======================================================
+
 function readSheet(
   filePath: string,
   sheetName: string,
   range = 0
 ): ExcelRow[] {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      `Arquivo Excel não encontrado: ${filePath}`
+    )
+  }
+
+  console.log(`Lendo arquivo: ${filePath}`)
+
   const workbook = XLSX.readFile(filePath)
 
   const sheet = workbook.Sheets[sheetName]
 
   if (!sheet) {
     throw new Error(
-      `Aba "${sheetName}" não encontrada em ${filePath}`
+      `Aba "${sheetName}" não encontrada em ${filePath}. ` +
+      `Abas disponíveis: ${workbook.SheetNames.join(", ")}`
     )
   }
 
@@ -40,6 +61,10 @@ function readSheet(
     range,
   }) as ExcelRow[]
 }
+
+// ======================================================
+// FUNÇÕES AUXILIARES
+// ======================================================
 
 function clean(value: any) {
   if (value === null || value === undefined) {
@@ -210,6 +235,7 @@ function getCodePrefix(code: string) {
 
 function getCurrentIsoWeekYear() {
   const now = new Date()
+
   const date = new Date(
     Date.UTC(
       now.getFullYear(),
@@ -220,17 +246,20 @@ function getCurrentIsoWeekYear() {
 
   const dayNumber = date.getUTCDay() || 7
 
-  date.setUTCDate(date.getUTCDate() + 4 - dayNumber)
+  date.setUTCDate(
+    date.getUTCDate() + 4 - dayNumber
+  )
 
   const yearStart = new Date(
     Date.UTC(date.getUTCFullYear(), 0, 1)
   )
 
   const week = Math.ceil(
-    ((date.getTime() - yearStart.getTime()) /
-      86400000 +
-      1) /
-      7
+    (
+      (date.getTime() - yearStart.getTime()) /
+        86400000 +
+      1
+    ) / 7
   )
 
   return {
@@ -238,6 +267,10 @@ function getCurrentIsoWeekYear() {
     year: date.getUTCFullYear(),
   }
 }
+
+// ======================================================
+// USUÁRIO DA SEED
+// ======================================================
 
 async function getSeedUserId() {
   const user = await prisma.user.findFirst({
@@ -251,12 +284,17 @@ async function getSeedUserId() {
 
   if (!user) {
     throw new Error(
-      "Nenhum usuário encontrado. Crie pelo menos um usuário antes de rodar a seed."
+      "Nenhum usuário encontrado. " +
+      "Crie pelo menos um usuário antes de rodar a seed."
     )
   }
 
   return user.id
 }
+
+// ======================================================
+// PAÍS
+// ======================================================
 
 async function getBrazilCountryId() {
   const country = await prisma.country.upsert({
@@ -278,54 +316,71 @@ async function getBrazilCountryId() {
   return country.id
 }
 
+// ======================================================
+// FORNECEDOR
+// ======================================================
+
 async function findOrCreateSupplier(
   name: string,
   countryId: string
 ) {
-  const existing = await prisma.supplier.findFirst({
-    where: {
-      name,
-    },
-    select: {
-      id: true,
-    },
-  })
+  const existing =
+    await prisma.supplier.findFirst({
+      where: {
+        name,
+      },
+      select: {
+        id: true,
+      },
+    })
 
   if (existing) {
     return existing.id
   }
 
-  const supplier = await prisma.supplier.create({
-    data: {
-      name,
-      supplierCodeSap: null,
-      status: "ACTIVE",
-      countryId,
-    },
-    select: {
-      id: true,
-    },
-  })
+  const supplier =
+    await prisma.supplier.create({
+      data: {
+        name,
+        supplierCodeSap: null,
+        status: "ACTIVE",
+        countryId,
+      },
+      select: {
+        id: true,
+      },
+    })
 
   return supplier.id
 }
+
+// ======================================================
+// SEQUENCE NUMBER
+// ======================================================
 
 const usedSequenceNumbers = new Set<number>()
 
 let maxSequenceNumber = 0
 
 async function loadUsedSequenceNumbers() {
-  const risks = await prisma.riskEvent.findMany({
-    select: {
-      sequenceNumber: true,
-    },
-  })
+  const risks =
+    await prisma.riskEvent.findMany({
+      select: {
+        sequenceNumber: true,
+      },
+    })
 
   for (const risk of risks) {
-    usedSequenceNumbers.add(risk.sequenceNumber)
+    usedSequenceNumbers.add(
+      risk.sequenceNumber
+    )
 
-    if (risk.sequenceNumber > maxSequenceNumber) {
-      maxSequenceNumber = risk.sequenceNumber
+    if (
+      risk.sequenceNumber >
+      maxSequenceNumber
+    ) {
+      maxSequenceNumber =
+        risk.sequenceNumber
     }
   }
 }
@@ -335,12 +390,20 @@ function reserveSequenceNumber(
 ) {
   if (
     preferredSequenceNumber > 0 &&
-    !usedSequenceNumbers.has(preferredSequenceNumber)
+    !usedSequenceNumbers.has(
+      preferredSequenceNumber
+    )
   ) {
-    usedSequenceNumbers.add(preferredSequenceNumber)
+    usedSequenceNumbers.add(
+      preferredSequenceNumber
+    )
 
-    if (preferredSequenceNumber > maxSequenceNumber) {
-      maxSequenceNumber = preferredSequenceNumber
+    if (
+      preferredSequenceNumber >
+      maxSequenceNumber
+    ) {
+      maxSequenceNumber =
+        preferredSequenceNumber
     }
 
     return preferredSequenceNumber
@@ -348,134 +411,220 @@ function reserveSequenceNumber(
 
   maxSequenceNumber += 1
 
-  while (usedSequenceNumbers.has(maxSequenceNumber)) {
+  while (
+    usedSequenceNumbers.has(
+      maxSequenceNumber
+    )
+  ) {
     maxSequenceNumber += 1
   }
 
-  usedSequenceNumbers.add(maxSequenceNumber)
+  usedSequenceNumbers.add(
+    maxSequenceNumber
+  )
 
   return maxSequenceNumber
 }
+
+// ======================================================
+// RISK EVENT
+// ======================================================
 
 async function findOrCreateRiskEvent(params: {
   code: string
   supplierId: string
   createdById: string
-  openingReason: ReturnType<typeof mapOpeningReason>
-  riskLevel: "GREEN" | "YELLOW" | "RED"
-  workflowStatus: "OPEN" | "CLOSED" | "CANCELED"
+
+  openingReason:
+    ReturnType<typeof mapOpeningReason>
+
+  riskLevel:
+    "GREEN" | "YELLOW" | "RED"
+
+  workflowStatus:
+    "OPEN" | "CLOSED" | "CANCELED"
+
   commodity: string | null
   title: string
   description: string | null
 }) {
-  const existing = await prisma.riskEvent.findUnique({
-    where: {
-      code: params.code,
-    },
-    select: {
-      id: true,
-    },
-  })
-
-  const { week, year } = getCurrentIsoWeekYear()
-
- const preferredSequenceNumber =
-  parseSequenceNumber(params.code)
-
-const sequenceNumber =
-  reserveSequenceNumber(preferredSequenceNumber)
-
-  const codePrefix = getCodePrefix(params.code)
-
-  if (existing) {
-    const updated = await prisma.riskEvent.update({
+  const existing =
+    await prisma.riskEvent.findUnique({
       where: {
-        id: existing.id,
-      },
-      data: {
-        supplierId: params.supplierId,
-        openingReason: params.openingReason,
-        riskLevel: params.riskLevel,
-        workflowStatus: params.workflowStatus,
-        commodity: params.commodity,
-        title: params.title,
-        description: params.description,
+        code: params.code,
       },
       select: {
         id: true,
       },
     })
 
+  const { week, year } =
+    getCurrentIsoWeekYear()
+
+  /*
+   * IMPORTANTE:
+   * Só reservamos um novo sequenceNumber
+   * quando realmente vamos criar uma RM.
+   *
+   * Isso evita consumir números
+   * desnecessariamente quando a RM já existe.
+   */
+  if (existing) {
+    const updated =
+      await prisma.riskEvent.update({
+        where: {
+          id: existing.id,
+        },
+        data: {
+          supplierId:
+            params.supplierId,
+
+          openingReason:
+            params.openingReason,
+
+          riskLevel:
+            params.riskLevel,
+
+          workflowStatus:
+            params.workflowStatus,
+
+          commodity:
+            params.commodity,
+
+          title:
+            params.title,
+
+          description:
+            params.description,
+        },
+        select: {
+          id: true,
+        },
+      })
+
     return updated.id
   }
 
-  const risk = await prisma.riskEvent.create({
-    data: {
-      code: params.code,
-      sequenceNumber,
-      codePrefix,
+  const preferredSequenceNumber =
+    parseSequenceNumber(params.code)
 
-      title: params.title,
-      description: params.description,
+  const sequenceNumber =
+    reserveSequenceNumber(
+      preferredSequenceNumber
+    )
 
-      openingReason: params.openingReason,
+  const codePrefix =
+    getCodePrefix(params.code)
 
-      supplierId: params.supplierId,
-      commodity: params.commodity,
+  const risk =
+    await prisma.riskEvent.create({
+      data: {
+        code:
+          params.code,
 
-      workflowStatus: params.workflowStatus,
-      riskLevel: params.riskLevel,
+        sequenceNumber,
 
-      createdWeek: week,
-      createdYear: year,
+        codePrefix,
 
-      createdById: params.createdById,
-    },
-    select: {
-      id: true,
-    },
-  })
+        title:
+          params.title,
+
+        description:
+          params.description,
+
+        openingReason:
+          params.openingReason,
+
+        supplierId:
+          params.supplierId,
+
+        commodity:
+          params.commodity,
+
+        workflowStatus:
+          params.workflowStatus,
+
+        riskLevel:
+          params.riskLevel,
+
+        createdWeek:
+          week,
+
+        createdYear:
+          year,
+
+        createdById:
+          params.createdById,
+      },
+      select: {
+        id: true,
+      },
+    })
 
   return risk.id
 }
+
+// ======================================================
+// PART NUMBER
+// ======================================================
 
 async function findOrCreatePartNumber(params: {
   partNumber: string
   description: string | null
   vehicleProgram: string | null
 }) {
-  const part = await prisma.partNumber.upsert({
-    where: {
-      partNumber: params.partNumber,
-    },
-    create: {
-      partNumber: params.partNumber,
-      description: params.description,
-      vehicleProgram: params.vehicleProgram,
-    },
-    update: {
-      description: params.description,
-      vehicleProgram: params.vehicleProgram,
-    },
-    select: {
-      id: true,
-    },
-  })
+  const part =
+    await prisma.partNumber.upsert({
+      where: {
+        partNumber:
+          params.partNumber,
+      },
+      create: {
+        partNumber:
+          params.partNumber,
+
+        description:
+          params.description,
+
+        vehicleProgram:
+          params.vehicleProgram,
+      },
+      update: {
+        description:
+          params.description,
+
+        vehicleProgram:
+          params.vehicleProgram,
+      },
+      select: {
+        id: true,
+      },
+    })
 
   return part.id
 }
 
+// ======================================================
+// RISK EVENT PART
+// ======================================================
+
 async function findOrCreateRiskPart(params: {
   riskEventId: string
   partNumberId: string
-  status: ReturnType<typeof mapPartStatus>
+
+  status:
+    ReturnType<typeof mapPartStatus>
+
   assignedToId: string | null
 }) {
   const existing =
     await prisma.riskEventPart.findFirst({
       where: {
-        riskEventId: params.riskEventId,
-        partNumberId: params.partNumberId,
+        riskEventId:
+          params.riskEventId,
+
+        partNumberId:
+          params.partNumberId,
       },
       select: {
         id: true,
@@ -489,8 +638,11 @@ async function findOrCreateRiskPart(params: {
           id: existing.id,
         },
         data: {
-          status: params.status,
-          assignedToId: params.assignedToId,
+          status:
+            params.status,
+
+          assignedToId:
+            params.assignedToId,
         },
         select: {
           id: true,
@@ -503,11 +655,20 @@ async function findOrCreateRiskPart(params: {
   const riskPart =
     await prisma.riskEventPart.create({
       data: {
-        riskEventId: params.riskEventId,
-        partNumberId: params.partNumberId,
-        status: params.status,
-        logisticsStatus: "NOT_REQUESTED",
-        assignedToId: params.assignedToId,
+        riskEventId:
+          params.riskEventId,
+
+        partNumberId:
+          params.partNumberId,
+
+        status:
+          params.status,
+
+        logisticsStatus:
+          "NOT_REQUESTED",
+
+        assignedToId:
+          params.assignedToId,
       },
       select: {
         id: true,
@@ -517,18 +678,39 @@ async function findOrCreateRiskPart(params: {
   return riskPart.id
 }
 
+// ======================================================
+// RISK PLAN ATIVO
+// ======================================================
+
 async function seedActiveRiskPlan(
   createdById: string,
   countryId: string
 ) {
-  const rows = readSheet(ACTIVE_FILE, "Risk Plan", 3)
+  console.log("")
+  console.log(
+    "Importando RMs ativas..."
+  )
+
+  const rows =
+    readSheet(
+      ACTIVE_FILE,
+      "Risk Plan",
+      3
+    )
+
+  console.log(
+    `${rows.length} linhas encontradas em Risk Plan`
+  )
 
   let imported = 0
   let skipped = 0
 
   for (const row of rows) {
-    const code = clean(row["RMs"])
-    const pn = clean(row["PN"])
+    const code =
+      clean(row["RMs"])
+
+    const pn =
+      clean(row["PN"])
 
     if (!code || !pn) {
       skipped++
@@ -536,143 +718,252 @@ async function seedActiveRiskPlan(
     }
 
     const supplierName =
-      clean(row["Fornecedor "]) || "Fornecedor não informado"
+      clean(row["Fornecedor "]) ||
+      "Fornecedor não informado"
 
-    const supplierId = await findOrCreateSupplier(
-      supplierName,
-      countryId
-    )
+    const supplierId =
+      await findOrCreateSupplier(
+        supplierName,
+        countryId
+      )
 
-    const riskEventId = await findOrCreateRiskEvent({
-      code,
-      supplierId,
-      createdById,
-      openingReason: mapOpeningReason(
-        row["Classificação"]
-      ),
-      riskLevel: mapRiskLevel(row["Status RM"]),
-      workflowStatus: "OPEN",
-      commodity: clean(row["Comodity"]),
-      title: `${code} - ${supplierName}`,
-      description: clean(row["Classificação"]),
-    })
+    const riskEventId =
+      await findOrCreateRiskEvent({
+        code,
+        supplierId,
+        createdById,
 
-    const partNumberId = await findOrCreatePartNumber({
-      partNumber: pn,
-      description: clean(row["Descrição"]),
-      vehicleProgram: null,
-    })
+        openingReason:
+          mapOpeningReason(
+            row["Classificação"]
+          ),
 
-    const riskPartId = await findOrCreateRiskPart({
-      riskEventId,
-      partNumberId,
-      status: mapPartStatus(row["Status PN"]),
-      assignedToId: null,
-    })
+        riskLevel:
+          mapRiskLevel(
+            row["Status RM"]
+          ),
+
+        workflowStatus:
+          "OPEN",
+
+        commodity:
+          clean(
+            row["Comodity"]
+          ),
+
+        title:
+          `${code} - ${supplierName}`,
+
+        description:
+          clean(
+            row["Classificação"]
+          ),
+      })
+
+    const partNumberId =
+      await findOrCreatePartNumber({
+        partNumber: pn,
+
+        description:
+          clean(
+            row["Descrição"]
+          ),
+
+        vehicleProgram:
+          null,
+      })
+
+    const riskPartId =
+      await findOrCreateRiskPart({
+        riskEventId,
+        partNumberId,
+
+        status:
+          mapPartStatus(
+            row["Status PN"]
+          ),
+
+        assignedToId:
+          null,
+      })
 
     await prisma.riskPartAssessment.upsert({
       where: {
-        riskEventPartId: riskPartId,
+        riskEventPartId:
+          riskPartId,
       },
+
       create: {
-        riskEventPartId: riskPartId,
+        riskEventPartId:
+          riskPartId,
 
-        isPartCanceled: parseBooleanNullable(
-          row["PN Cancelado"]
-        ),
-        hasDemand: parseBooleanNullable(
-          row["PN Com demanda?"]
-        ),
-        sourceNamed: parseBooleanNullable(
-          row["Fonte Nomeada"]
-        ),
+        isPartCanceled:
+          parseBooleanNullable(
+            row["PN Cancelado"]
+          ),
 
-        actionPlanReceived: parseBooleanNullable(
-          row["Cronograma/Plano de Ação Recebido"]
-        ),
+        hasDemand:
+          parseBooleanNullable(
+            row["PN Com demanda?"]
+          ),
+
+        sourceNamed:
+          parseBooleanNullable(
+            row["Fonte Nomeada"]
+          ),
+
+        actionPlanReceived:
+          parseBooleanNullable(
+            row[
+              "Cronograma/Plano de Ação Recebido"
+            ]
+          ),
+
         scheduleMeetsDevelopment:
           parseBooleanNullable(
-            row["Cronograma Atende Desenvolvimento"]
+            row[
+              "Cronograma Atende Desenvolvimento"
+            ]
           ),
+
         technicalCommercialOk:
           parseBooleanNullable(
             row[
               "Parte Técnica (Eng. & QA) e Comercial resolvida?"
             ]
           ),
+
         productionRiskMitigated:
           parseBooleanNullable(
-            row["Risco p/ Produção Mitigado?"]
+            row[
+              "Risco p/ Produção Mitigado?"
+            ]
           ),
-        eopManagementOk: parseBooleanNullable(
-          row["Gerenciamento de EOP está OK?"]
-        ),
+
+        eopManagementOk:
+          parseBooleanNullable(
+            row[
+              "Gerenciamento de EOP está OK?"
+            ]
+          ),
 
         deviationPfpFinished:
           parseBooleanNullable(
-            row["Desvio c/ PFP Finalizado?"]
+            row[
+              "Desvio c/ PFP Finalizado?"
+            ]
           ),
-        onlyVdaPending: parseBooleanNullable(
-          row["Fórmula\nPendente Somente VDA?"]
-        ),
-        vdaApproved: parseBooleanNullable(
-          row["VDA Aprovado (1 ou 3)"]
-        ),
+
+        onlyVdaPending:
+          parseBooleanNullable(
+            row[
+              "Fórmula\nPendente Somente VDA?"
+            ]
+          ),
+
+        vdaApproved:
+          parseBooleanNullable(
+            row[
+              "VDA Aprovado (1 ou 3)"
+            ]
+          ),
+
         modificationImplemented:
           parseBooleanNullable(
-            row["Modificação Implentada?"]
+            row[
+              "Modificação Implentada?"
+            ]
           ),
       },
-      update: {
-        isPartCanceled: parseBooleanNullable(
-          row["PN Cancelado"]
-        ),
-        hasDemand: parseBooleanNullable(
-          row["PN Com demanda?"]
-        ),
-        sourceNamed: parseBooleanNullable(
-          row["Fonte Nomeada"]
-        ),
 
-        actionPlanReceived: parseBooleanNullable(
-          row["Cronograma/Plano de Ação Recebido"]
-        ),
+      update: {
+        isPartCanceled:
+          parseBooleanNullable(
+            row["PN Cancelado"]
+          ),
+
+        hasDemand:
+          parseBooleanNullable(
+            row["PN Com demanda?"]
+          ),
+
+        sourceNamed:
+          parseBooleanNullable(
+            row["Fonte Nomeada"]
+          ),
+
+        actionPlanReceived:
+          parseBooleanNullable(
+            row[
+              "Cronograma/Plano de Ação Recebido"
+            ]
+          ),
+
         scheduleMeetsDevelopment:
           parseBooleanNullable(
-            row["Cronograma Atende Desenvolvimento"]
+            row[
+              "Cronograma Atende Desenvolvimento"
+            ]
           ),
+
         technicalCommercialOk:
           parseBooleanNullable(
             row[
               "Parte Técnica (Eng. & QA) e Comercial resolvida?"
             ]
           ),
+
         productionRiskMitigated:
           parseBooleanNullable(
-            row["Risco p/ Produção Mitigado?"]
+            row[
+              "Risco p/ Produção Mitigado?"
+            ]
           ),
-        eopManagementOk: parseBooleanNullable(
-          row["Gerenciamento de EOP está OK?"]
-        ),
+
+        eopManagementOk:
+          parseBooleanNullable(
+            row[
+              "Gerenciamento de EOP está OK?"
+            ]
+          ),
 
         deviationPfpFinished:
           parseBooleanNullable(
-            row["Desvio c/ PFP Finalizado?"]
+            row[
+              "Desvio c/ PFP Finalizado?"
+            ]
           ),
-        onlyVdaPending: parseBooleanNullable(
-          row["Fórmula\nPendente Somente VDA?"]
-        ),
-        vdaApproved: parseBooleanNullable(
-          row["VDA Aprovado (1 ou 3)"]
-        ),
+
+        onlyVdaPending:
+          parseBooleanNullable(
+            row[
+              "Fórmula\nPendente Somente VDA?"
+            ]
+          ),
+
+        vdaApproved:
+          parseBooleanNullable(
+            row[
+              "VDA Aprovado (1 ou 3)"
+            ]
+          ),
+
         modificationImplemented:
           parseBooleanNullable(
-            row["Modificação Implentada?"]
+            row[
+              "Modificação Implentada?"
+            ]
           ),
       },
     })
 
     imported++
+
+    if (imported % 100 === 0) {
+      console.log(
+        `${imported} linhas ativas processadas...`
+      )
+    }
   }
 
   console.log(
@@ -680,14 +971,28 @@ async function seedActiveRiskPlan(
   )
 }
 
+// ======================================================
+// RISK PLAN CONCLUÍDO
+// ======================================================
+
 async function seedClosedRiskPlan(
   createdById: string,
   countryId: string
 ) {
-  const rows = readSheet(
-    CLOSED_FILE,
-    "RISK CONCLUÍDOS",
-    0
+  console.log("")
+  console.log(
+    "Importando RMs concluídas..."
+  )
+
+  const rows =
+    readSheet(
+      CLOSED_FILE,
+      "RISK CONCLUÍDOS",
+      0
+    )
+
+  console.log(
+    `${rows.length} linhas encontradas em RISK CONCLUÍDOS`
   )
 
   let imported = 0
@@ -714,44 +1019,87 @@ async function seedClosedRiskPlan(
       clean(row["Fornecedor"]) ||
       "Fornecedor não informado"
 
-    const supplierId = await findOrCreateSupplier(
-      supplierName,
-      countryId
-    )
+    const supplierId =
+      await findOrCreateSupplier(
+        supplierName,
+        countryId
+      )
 
-    const riskEventId = await findOrCreateRiskEvent({
-      code,
-      supplierId,
-      createdById,
-      openingReason: mapOpeningReason(
-        row["Classificação"]
-      ),
-      riskLevel: mapRiskLevel(row["Status RM"]),
-      workflowStatus: "CLOSED",
-      commodity:
-        clean(row["Comodity"]) ||
-        clean(row["Commodity"]),
-      title: `${code} - ${supplierName}`,
-      description:
-        clean(row["Comentários"]) ||
-        clean(row["Comentário"]) ||
-        clean(row["Classificação"]),
-    })
+    const riskEventId =
+      await findOrCreateRiskEvent({
+        code,
+        supplierId,
+        createdById,
 
-    const partNumberId = await findOrCreatePartNumber({
-      partNumber: pn,
-      description: clean(row["Descrição"]),
-      vehicleProgram: null,
-    })
+        openingReason:
+          mapOpeningReason(
+            row["Classificação"]
+          ),
+
+        riskLevel:
+          mapRiskLevel(
+            row["Status RM"]
+          ),
+
+        workflowStatus:
+          "CLOSED",
+
+        commodity:
+          clean(
+            row["Comodity"]
+          ) ||
+          clean(
+            row["Commodity"]
+          ),
+
+        title:
+          `${code} - ${supplierName}`,
+
+        description:
+          clean(
+            row["Comentários"]
+          ) ||
+          clean(
+            row["Comentário"]
+          ) ||
+          clean(
+            row["Classificação"]
+          ),
+      })
+
+    const partNumberId =
+      await findOrCreatePartNumber({
+        partNumber: pn,
+
+        description:
+          clean(
+            row["Descrição"]
+          ),
+
+        vehicleProgram:
+          null,
+      })
 
     await findOrCreateRiskPart({
       riskEventId,
       partNumberId,
-      status: mapPartStatus(row["Status PN"]),
-      assignedToId: null,
+
+      status:
+        mapPartStatus(
+          row["Status PN"]
+        ),
+
+      assignedToId:
+        null,
     })
 
     imported++
+
+    if (imported % 100 === 0) {
+      console.log(
+        `${imported} linhas concluídas processadas...`
+      )
+    }
   }
 
   console.log(
@@ -759,49 +1107,142 @@ async function seedClosedRiskPlan(
   )
 }
 
+// ======================================================
+// SINCRONIZA SEQUÊNCIA
+// ======================================================
+
 async function syncRiskSequence() {
-  const lastRisk = await prisma.riskEvent.findFirst({
-    orderBy: {
-      sequenceNumber: "desc",
-    },
-    select: {
-      sequenceNumber: true,
-    },
-  })
+  const lastRisk =
+    await prisma.riskEvent.findFirst({
+      orderBy: {
+        sequenceNumber:
+          "desc",
+      },
+      select: {
+        sequenceNumber:
+          true,
+      },
+    })
 
   await prisma.riskSequence.upsert({
     where: {
       key: "RISK_EVENT",
     },
+
     create: {
       key: "RISK_EVENT",
-      currentNumber: lastRisk?.sequenceNumber ?? 0,
+
+      currentNumber:
+        lastRisk?.sequenceNumber ??
+        0,
     },
+
     update: {
-      currentNumber: lastRisk?.sequenceNumber ?? 0,
+      currentNumber:
+        lastRisk?.sequenceNumber ??
+        0,
     },
   })
+
+  console.log(
+    `Sequência de RM sincronizada em: ${
+      lastRisk?.sequenceNumber ?? 0
+    }`
+  )
 }
 
+// ======================================================
+// MAIN
+// ======================================================
+
 async function main() {
-  console.log("Iniciando seed SRMS...")
+  console.log(
+    "======================================"
+  )
 
-  const createdById = await getSeedUserId()
-const countryId = await getBrazilCountryId()
+  console.log(
+    "Iniciando seed SRMS..."
+  )
 
-await loadUsedSequenceNumbers()
+  console.log(
+    "======================================"
+  )
 
-  await seedActiveRiskPlan(createdById, countryId)
-  await seedClosedRiskPlan(createdById, countryId)
+  console.log(
+    `Diretório atual: ${process.cwd()}`
+  )
+
+  console.log(
+    `Arquivo ativo: ${ACTIVE_FILE}`
+  )
+
+  console.log(
+    `Arquivo concluído: ${CLOSED_FILE}`
+  )
+
+  const createdById =
+    await getSeedUserId()
+
+  console.log(
+    `Usuário da importação encontrado: ${createdById}`
+  )
+
+  const countryId =
+    await getBrazilCountryId()
+
+  console.log(
+    `País Brasil: ${countryId}`
+  )
+
+  await loadUsedSequenceNumbers()
+
+  console.log(
+    `${usedSequenceNumbers.size} sequenceNumbers já existentes`
+  )
+
+  await seedActiveRiskPlan(
+    createdById,
+    countryId
+  )
+
+  await seedClosedRiskPlan(
+    createdById,
+    countryId
+  )
 
   await syncRiskSequence()
 
-  console.log("Seed SRMS finalizada com sucesso.")
+  console.log("")
+  console.log(
+    "======================================"
+  )
+
+  console.log(
+    "Seed SRMS finalizada com sucesso."
+  )
+
+  console.log(
+    "======================================"
+  )
 }
 
 main()
   .catch((error) => {
+    console.error("")
+    console.error(
+      "======================================"
+    )
+
+    console.error(
+      "ERRO DURANTE A SEED SRMS"
+    )
+
+    console.error(
+      "======================================"
+    )
+
     console.error(error)
+
     process.exit(1)
   })
   .finally(async () => {
