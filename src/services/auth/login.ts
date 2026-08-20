@@ -3,7 +3,7 @@ export async function login(
   password: string
 ) {
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
+    `/api/auth/login`,
     {
       method: 'POST',
 
