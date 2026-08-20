@@ -920,7 +920,7 @@ export default function RbacManagementPage() {
               }
             }}
           >
-            <DialogContent className="w-[620px] max-w-[90vw]">
+            <DialogContent className="sm:max-w-350 max-w-[90vw]">
               <DialogHeader>
                 <DialogTitle>
                   Gerenciar Permissões da Role
