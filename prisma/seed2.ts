@@ -1,14 +1,11 @@
 import { PrismaClient } from "@prisma/client"
-import { readFile, set_fs, utils } from "xlsx"
-import * as fs from "fs"
-import path from "path"
-
-set_fs(fs)
+import XLSX from "xlsx"
+import fs from "node:fs"
+import path from "node:path"
 
 const prisma = new PrismaClient()
 
 type ExcelRow = Record<string, any>
-
 // ======================================================
 // ARQUIVOS
 // ======================================================
@@ -44,7 +41,11 @@ function readSheet(
 
   console.log(`Lendo arquivo: ${filePath}`)
 
-  const workbook = readFile(filePath)
+  const fileBuffer = fs.readFileSync(filePath)
+
+  const workbook = XLSX.read(fileBuffer, {
+    type: "buffer",
+  })
 
   const sheet = workbook.Sheets[sheetName]
 
@@ -55,7 +56,7 @@ function readSheet(
     )
   }
 
-  return utils.sheet_to_json(sheet, {
+  return XLSX.utils.sheet_to_json(sheet, {
     defval: null,
     range,
   }) as ExcelRow[]
