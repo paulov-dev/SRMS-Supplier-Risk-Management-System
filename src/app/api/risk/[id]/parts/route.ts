@@ -95,19 +95,58 @@ function formatRiskPart(part: any) {
 function calculateRiskLevelFromPartStatuses(
   statuses: PartRiskStatus[]
 ): RiskLevel {
+  if (statuses.length === 0) {
+    return RiskLevel.YELLOW
+  }
+
+  // 1. Vermelho se existir qualquer PN vermelho
   if (statuses.includes(PartRiskStatus.RED)) {
     return RiskLevel.RED
   }
 
+  // 2. Amarelo se existir qualquer PN amarelo
+  // e não existir vermelho
   if (statuses.includes(PartRiskStatus.YELLOW)) {
     return RiskLevel.YELLOW
   }
 
+  // 3. Verde se existir qualquer PN verde
+  // e não existir vermelho ou amarelo
   if (statuses.includes(PartRiskStatus.GREEN)) {
     return RiskLevel.GREEN
   }
 
-  return RiskLevel.YELLOW
+  // 4. Cinza se todos os PNs forem cancelados
+  if (
+    statuses.every(
+      (status) => status === PartRiskStatus.GREY
+    )
+  ) {
+    return RiskLevel.GREY
+  }
+
+  // 5. Laranja se todos os PNs forem sem demanda
+  if (
+    statuses.every(
+      (status) => status === PartRiskStatus.ORANGE
+    )
+  ) {
+    return RiskLevel.ORANGE
+  }
+
+  // 6. Azul se todos os PNs forem azuis
+  if (
+    statuses.every(
+      (status) => status === PartRiskStatus.BLUE
+    )
+  ) {
+    return RiskLevel.BLUE
+  }
+
+  // 7. Caso misto: cancelado + sem demanda + azul
+  // Não tem risco vermelho/amarelo/verde ativo.
+  // Mantemos como azul por não haver risco ativo.
+  return RiskLevel.BLUE
 }
 
 async function recalculateRiskEventLevel(

@@ -74,7 +74,13 @@ type ActionPlanForm = {
     riskEventPartId: string
 }
 
-type RiskLevel = "GREEN" | "YELLOW" | "RED"
+type RiskLevel =
+    | "RED"
+    | "YELLOW"
+    | "GREEN"
+    | "GREY"
+    | "ORANGE"
+    | "BLUE"
 
 type UserOption = {
     id: string
@@ -424,32 +430,32 @@ const partStatusOptions: {
 }[] = [
         {
             value: "RED",
-            label: "Red",
+            label: "Vermelho",
             description: "Crítico",
         },
         {
             value: "YELLOW",
-            label: "Yellow",
+            label: "Amarelo",
             description: "Atenção",
         },
         {
             value: "GREEN",
-            label: "Green",
+            label: "Verde",
             description: "Controlado",
         },
         {
             value: "ORANGE",
-            label: "Orange",
+            label: "Laranja",
             description: "Sem demanda",
         },
         {
             value: "GREY",
-            label: "Grey",
+            label: "Cinza",
             description: "Cancelado",
         },
         {
             value: "BLUE",
-            label: "Blue",
+            label: "Azul",
             description: "Concluído",
         },
     ]
@@ -513,21 +519,42 @@ function getRiskLevelPill(level: RiskLevel) {
         case "GREEN":
             return (
                 <Pill backgroundColor="#16a34a">
-                    Green — Controlado
+                    Verde
                 </Pill>
             )
 
         case "YELLOW":
             return (
                 <Pill backgroundColor="#eab308" color="#000000">
-                    Yellow — Atenção
+                    Amarelo
                 </Pill>
             )
 
         case "RED":
             return (
                 <Pill backgroundColor="#dc2626">
-                    Red — Crítico
+                    Vermelho
+                </Pill>
+            )
+
+        case "ORANGE":
+            return (
+                <Pill backgroundColor="#f97316">
+                    Sem demanda
+                </Pill>
+            )
+
+        case "GREY":
+            return (
+                <Pill backgroundColor="#6b7280">
+                    Cancelado
+                </Pill>
+            )
+
+        case "BLUE":
+            return (
+                <Pill backgroundColor="#2563eb">
+                    Concluído
                 </Pill>
             )
 
@@ -548,21 +575,21 @@ function getPartStatusPill(status: PartRiskStatus) {
         case "GREEN":
             return (
                 <Pill backgroundColor="#16a34a">
-                    Green
+                    Verde
                 </Pill>
             )
 
         case "YELLOW":
             return (
                 <Pill backgroundColor="#eab308" color="#000000">
-                    Yellow
+                    Amarelo
                 </Pill>
             )
 
         case "RED":
             return (
                 <Pill backgroundColor="#dc2626">
-                    Red
+                    Vermelho
                 </Pill>
             )
 

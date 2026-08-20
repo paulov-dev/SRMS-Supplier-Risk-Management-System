@@ -305,17 +305,20 @@ function assessmentToJson(assessment: any) {
 function calculatePartStatusFromAssessment(
   assessment: Record<AssessmentKey, boolean | null>
 ): PartRiskStatus {
-  // 1. Cinza: PN cancelado
+  // 1. Cancelado tem prioridade máxima
+  // Se "PN cancelado?" = Sim, ignora todas as outras perguntas
   if (assessment.isPartCanceled === true) {
     return PartRiskStatus.GREY
   }
 
-  // 2. Laranja: PN sem demanda
+  // 2. Sem demanda
+  // Se "PN com demanda?" = Não, ignora as perguntas seguintes
   if (assessment.hasDemand === false) {
     return PartRiskStatus.ORANGE
   }
 
-  // 3. Vermelho: falhas críticas de fonte/plano/cronograma
+  // 3. Vermelho
+  // Se qualquer uma dessas perguntas for Não
   if (
     assessment.sourceNamed === false ||
     assessment.actionPlanReceived === false ||
@@ -324,45 +327,90 @@ function calculatePartStatusFromAssessment(
     return PartRiskStatus.RED
   }
 
-  // 4. Amarelo: pendências técnicas, produção, EOP, desvio/PFP ou VDA
+  // 4. Amarelo
+  // Se qualquer uma dessas perguntas for Não
   if (
     assessment.technicalCommercialOk === false ||
     assessment.productionRiskMitigated === false ||
     assessment.eopManagementOk === false ||
-    assessment.deviationPfpFinished === false ||
-    assessment.onlyVdaPending === false
+    assessment.deviationPfpFinished === false
   ) {
     return PartRiskStatus.YELLOW
   }
 
-  // 5. Verde: VDA aprovado ou modificação implementada
+  // 5. Verde
+  // Se chegou até aqui, significa que não é cancelado,
+  // não é sem demanda, não é vermelho e não é amarelo.
+  // Então, se restarem apenas pontos relacionados a VDA/modificação,
+  // o PN fica verde.
   if (
+    assessment.onlyVdaPending === true ||
     assessment.vdaApproved === true ||
     assessment.modificationImplemented === true
   ) {
     return PartRiskStatus.GREEN
   }
 
-  // 6. Azul: concluído / sem pendência aplicável
+  // 6. Azul
+  // Não entrou em nenhuma classificação anterior
   return PartRiskStatus.BLUE
 }
 
 function calculateRiskLevelFromPartStatuses(
   statuses: PartRiskStatus[]
 ): RiskLevel {
+  if (statuses.length === 0) {
+    return RiskLevel.YELLOW
+  }
+
+  // 1. Vermelho se existir qualquer PN vermelho
   if (statuses.includes(PartRiskStatus.RED)) {
     return RiskLevel.RED
   }
 
+  // 2. Amarelo se existir qualquer PN amarelo
+  // e não existir vermelho
   if (statuses.includes(PartRiskStatus.YELLOW)) {
     return RiskLevel.YELLOW
   }
 
+  // 3. Verde se existir qualquer PN verde
+  // e não existir vermelho ou amarelo
   if (statuses.includes(PartRiskStatus.GREEN)) {
     return RiskLevel.GREEN
   }
 
-  return RiskLevel.YELLOW
+  // 4. Cinza se todos os PNs forem cancelados
+  if (
+    statuses.every(
+      (status) => status === PartRiskStatus.GREY
+    )
+  ) {
+    return RiskLevel.GREY
+  }
+
+  // 5. Laranja se todos os PNs forem sem demanda
+  if (
+    statuses.every(
+      (status) => status === PartRiskStatus.ORANGE
+    )
+  ) {
+    return RiskLevel.ORANGE
+  }
+
+  // 6. Azul se todos os PNs forem azuis
+  if (
+    statuses.every(
+      (status) => status === PartRiskStatus.BLUE
+    )
+  ) {
+    return RiskLevel.BLUE
+  }
+
+  // 7. Caso misto: cancelado + sem demanda + azul
+  // Não tem risco vermelho/amarelo/verde ativo.
+  // Mantemos como azul por não haver risco ativo.
+  return RiskLevel.BLUE
 }
 
 async function recalculateRiskEventLevel(

@@ -41,6 +41,9 @@ enum RiskLevel {
   GREEN
   YELLOW
   RED
+  GREY
+  ORANGE
+  BLUE
 }
 
 enum PartRiskStatus {
