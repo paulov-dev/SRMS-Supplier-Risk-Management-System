@@ -141,7 +141,6 @@ type RiskPartAssessment = {
     eopManagementOk: boolean | null
 
     deviationPfpFinished: boolean | null
-    onlyVdaPending: boolean | null
     vdaApproved: boolean | null
     modificationImplemented: boolean | null
 
@@ -163,7 +162,6 @@ type EditPartAssessmentForm = {
     eopManagementOk: AssessmentSelectValue
 
     deviationPfpFinished: AssessmentSelectValue
-    onlyVdaPending: AssessmentSelectValue
     vdaApproved: AssessmentSelectValue
     modificationImplemented: AssessmentSelectValue
 }
@@ -472,7 +470,6 @@ const emptyAssessmentForm: EditPartAssessmentForm = {
     eopManagementOk: "null",
 
     deviationPfpFinished: "null",
-    onlyVdaPending: "null",
     vdaApproved: "null",
     modificationImplemented: "null",
 }
@@ -752,7 +749,6 @@ function hasAssessmentData(
         assessment.productionRiskMitigated,
         assessment.eopManagementOk,
         assessment.deviationPfpFinished,
-        assessment.onlyVdaPending,
         assessment.vdaApproved,
         assessment.modificationImplemented,
     ].some((value) => value !== null)
@@ -797,11 +793,7 @@ function getAssessmentItems(
         {
             label: "Desvio/PFP finalizado?",
             value: assessment.deviationPfpFinished,
-        },
-        {
-            label: "Somente VDA pendente?",
-            value: assessment.onlyVdaPending,
-        },
+        },        
         {
             label: "VDA aprovado?",
             value: assessment.vdaApproved,
@@ -864,9 +856,6 @@ function buildAssessmentForm(
         deviationPfpFinished: boolToAssessmentValue(
             assessment?.deviationPfpFinished
         ),
-        onlyVdaPending: boolToAssessmentValue(
-            assessment?.onlyVdaPending
-        ),
         vdaApproved: boolToAssessmentValue(
             assessment?.vdaApproved
         ),
@@ -908,9 +897,6 @@ function buildAssessmentPayload(
 
         deviationPfpFinished: assessmentValueToBool(
             assessment.deviationPfpFinished
-        ),
-        onlyVdaPending: assessmentValueToBool(
-            assessment.onlyVdaPending
         ),
         vdaApproved: assessmentValueToBool(
             assessment.vdaApproved
@@ -3223,20 +3209,6 @@ export default function RiskDetailPage() {
                                                                     assessment: {
                                                                         ...prev.assessment,
                                                                         deviationPfpFinished: value,
-                                                                    },
-                                                                }))
-                                                            }
-                                                        />
-
-                                                        <AssessmentSelectField
-                                                            label="Somente VDA pendente?"
-                                                            value={editPartForm.assessment.onlyVdaPending}
-                                                            onChange={(value) =>
-                                                                setEditPartForm((prev) => ({
-                                                                    ...prev,
-                                                                    assessment: {
-                                                                        ...prev.assessment,
-                                                                        onlyVdaPending: value,
                                                                     },
                                                                 }))
                                                             }

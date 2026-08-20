@@ -127,36 +127,34 @@ function formatRiskPart(part: any) {
 
         aassessment: part.assessment
       ? {
-          id: part.assessment.id,
+        id: part.assessment.id,
 
-          isPartCanceled:
-            part.assessment.isPartCanceled,
-          hasDemand: part.assessment.hasDemand,
-          sourceNamed: part.assessment.sourceNamed,
+        isPartCanceled:
+          part.assessment.isPartCanceled,
+        hasDemand: part.assessment.hasDemand,
+        sourceNamed: part.assessment.sourceNamed,
 
-          actionPlanReceived:
-            part.assessment.actionPlanReceived,
-          scheduleMeetsDevelopment:
-            part.assessment.scheduleMeetsDevelopment,
-          technicalCommercialOk:
-            part.assessment.technicalCommercialOk,
-          productionRiskMitigated:
-            part.assessment.productionRiskMitigated,
-          eopManagementOk:
-            part.assessment.eopManagementOk,
+        actionPlanReceived:
+          part.assessment.actionPlanReceived,
+        scheduleMeetsDevelopment:
+          part.assessment.scheduleMeetsDevelopment,
+        technicalCommercialOk:
+          part.assessment.technicalCommercialOk,
+        productionRiskMitigated:
+          part.assessment.productionRiskMitigated,
+        eopManagementOk:
+          part.assessment.eopManagementOk,
 
-          deviationPfpFinished:
-            part.assessment.deviationPfpFinished,
-          onlyVdaPending:
-            part.assessment.onlyVdaPending,
-          vdaApproved:
-            part.assessment.vdaApproved,
-          modificationImplemented:
-            part.assessment.modificationImplemented,
+        deviationPfpFinished:
+          part.assessment.deviationPfpFinished,
+        vdaApproved:
+          part.assessment.vdaApproved,
+        modificationImplemented:
+          part.assessment.modificationImplemented,
 
-          createdAt: part.assessment.createdAt,
-          updatedAt: part.assessment.updatedAt,
-        }
+        createdAt: part.assessment.createdAt,
+        updatedAt: part.assessment.updatedAt,
+      }
       : null,
   }
 }
@@ -171,7 +169,6 @@ const assessmentKeys = [
   "productionRiskMitigated",
   "eopManagementOk",
   "deviationPfpFinished",
-  "onlyVdaPending",
   "vdaApproved",
   "modificationImplemented",
 ] as const
@@ -306,19 +303,16 @@ function calculatePartStatusFromAssessment(
   assessment: Record<AssessmentKey, boolean | null>
 ): PartRiskStatus {
   // 1. Cancelado tem prioridade máxima
-  // Se "PN cancelado?" = Sim, ignora todas as outras perguntas
   if (assessment.isPartCanceled === true) {
     return PartRiskStatus.GREY
   }
 
   // 2. Sem demanda
-  // Se "PN com demanda?" = Não, ignora as perguntas seguintes
   if (assessment.hasDemand === false) {
     return PartRiskStatus.ORANGE
   }
 
   // 3. Vermelho
-  // Se qualquer uma dessas perguntas for Não
   if (
     assessment.sourceNamed === false ||
     assessment.actionPlanReceived === false ||
@@ -328,7 +322,6 @@ function calculatePartStatusFromAssessment(
   }
 
   // 4. Amarelo
-  // Se qualquer uma dessas perguntas for Não
   if (
     assessment.technicalCommercialOk === false ||
     assessment.productionRiskMitigated === false ||
@@ -339,20 +332,14 @@ function calculatePartStatusFromAssessment(
   }
 
   // 5. Verde
-  // Se chegou até aqui, significa que não é cancelado,
-  // não é sem demanda, não é vermelho e não é amarelo.
-  // Então, se restarem apenas pontos relacionados a VDA/modificação,
-  // o PN fica verde.
   if (
-    assessment.onlyVdaPending === true ||
-    assessment.vdaApproved === true ||
-    assessment.modificationImplemented === true
+    assessment.vdaApproved === false ||
+    assessment.modificationImplemented === false
   ) {
     return PartRiskStatus.GREEN
   }
 
   // 6. Azul
-  // Não entrou em nenhuma classificação anterior
   return PartRiskStatus.BLUE
 }
 
