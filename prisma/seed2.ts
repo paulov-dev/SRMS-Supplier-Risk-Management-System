@@ -1,10 +1,9 @@
 import { PrismaClient } from "@prisma/client"
-import * as XLSX from "xlsx"
+import { readFile, set_fs, utils } from "xlsx"
 import * as fs from "fs"
 import path from "path"
 
-// Necessário para XLSX.readFile funcionar corretamente em ESM
-XLSX.set_fs(fs)
+set_fs(fs)
 
 const prisma = new PrismaClient()
 
@@ -45,7 +44,7 @@ function readSheet(
 
   console.log(`Lendo arquivo: ${filePath}`)
 
-  const workbook = XLSX.readFile(filePath)
+  const workbook = readFile(filePath)
 
   const sheet = workbook.Sheets[sheetName]
 
@@ -56,7 +55,7 @@ function readSheet(
     )
   }
 
-  return XLSX.utils.sheet_to_json(sheet, {
+  return utils.sheet_to_json(sheet, {
     defval: null,
     range,
   }) as ExcelRow[]
