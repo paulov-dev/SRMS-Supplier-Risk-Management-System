@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 import {
   Breadcrumb,
@@ -129,51 +130,51 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b px-4">
-      <SidebarTrigger className="-ml-1" />
+  <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b px-4">
+    <SidebarTrigger className="-ml-1" />
 
-      <Separator
-        orientation="vertical"
-        className="mr-2 h-4"
-      />
+    <Separator
+      orientation="vertical"
+      className="mr-2 h-4"
+    />
 
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/dashboard">
-                SRMS
+    <nav className="flex min-w-0 flex-1 items-center gap-1 text-sm">
+      <Link
+        href="/dashboard"
+        className="font-medium text-foreground hover:underline"
+      >
+        SRMS
+      </Link>
+
+      {segments.map((segment, index) => {
+        const isLast = index === segments.length - 1
+        const label = getSegmentLabel(segment)
+        const href = getSegmentHref(index)
+
+        return (
+          <React.Fragment key={`${segment}-${index}`}>
+            <span className="text-muted-foreground">
+              /
+            </span>
+
+            {isLast ? (
+              <span className="truncate font-medium text-foreground">
+                {label}
+              </span>
+            ) : (
+              <Link
+                href={href}
+                className="text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {label}
               </Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
+            )}
+          </React.Fragment>
+        )
+      })}
+    </nav>
 
-          {segments.map((segment, index) => {
-            const isLast = index === segments.length - 1
-            const label = getSegmentLabel(segment)
-            const href = getSegmentHref(index)
-
-            return (
-              <React.Fragment key={`${segment}-${index}`}>
-                <BreadcrumbSeparator />
-
-                <BreadcrumbItem>
-                  {isLast ? (
-                    <BreadcrumbPage>
-                      {label}
-                    </BreadcrumbPage>
-                  ) : (
-                    <BreadcrumbLink asChild>
-                      <Link href={href}>
-                        {label}
-                      </Link>
-                    </BreadcrumbLink>
-                  )}
-                </BreadcrumbItem>
-              </React.Fragment>
-            )
-          })}
-        </BreadcrumbList>
-      </Breadcrumb>
-    </header>
-  )
+    <ThemeToggle />
+  </header>
+)
 }
