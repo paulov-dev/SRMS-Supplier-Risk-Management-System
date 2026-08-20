@@ -834,7 +834,7 @@ export default function AuditLogsPage() {
               }
             }}
           >
-            <DialogContent className="w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto">
+            <DialogContent className="w-[98vw] sm:max-w-350 max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   Detalhes do Audit Log
