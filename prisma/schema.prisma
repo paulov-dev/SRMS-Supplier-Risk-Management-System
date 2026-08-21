@@ -615,6 +615,7 @@ model RiskStatusHistory {
   oldStatus   RiskWorkflowStatus
   newStatus   RiskWorkflowStatus
   changedBy   String
+  reason      String?
   changedAt   DateTime           @default(now())
 
   riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])

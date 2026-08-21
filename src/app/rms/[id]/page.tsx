@@ -166,6 +166,24 @@ type EditPartAssessmentForm = {
     modificationImplemented: AssessmentSelectValue
 }
 
+type EditRiskForm = {
+    title: string
+    description: string
+    openingReason: string
+    commodity: string
+    assignedToId: string
+}
+
+const commodityOptions = [
+  "ELE/QUI",
+  "MET",
+  "PWT",
+  "CAB",
+  "CHA",
+  "MOT",
+  "OUTROS",
+]
+
 type LogisticsStatus =
     | "PENDING"
     | "APPROVED"
@@ -297,6 +315,7 @@ type RiskDetail = {
         id: string
         oldStatus: string
         newStatus: string
+        reason: string | null
         changedAt: string
         user: {
             id: string
@@ -793,7 +812,7 @@ function getAssessmentItems(
         {
             label: "Desvio/PFP finalizado?",
             value: assessment.deviationPfpFinished,
-        },        
+        },
         {
             label: "VDA aprovado?",
             value: assessment.vdaApproved,
@@ -1040,6 +1059,30 @@ export default function RiskDetailPage() {
 
     const [loading, setLoading] = useState(true)
 
+    const [editRiskOpen, setEditRiskOpen] =
+        useState(false)
+
+    const [savingRisk, setSavingRisk] =
+        useState(false)
+
+    const [editRiskForm, setEditRiskForm] =
+        useState<EditRiskForm>({
+            title: "",
+            description: "",
+            openingReason: "",
+            commodity: "",
+            assignedToId: "none",
+        })
+
+    const [workflowAction, setWorkflowAction] =
+        useState<"close" | "reopen" | null>(null)
+
+    const [workflowReason, setWorkflowReason] =
+        useState("")
+
+    const [savingWorkflow, setSavingWorkflow] =
+        useState(false)
+
     useEffect(() => {
         loadRisk()
         loadUsers()
@@ -1116,6 +1159,149 @@ export default function RiskDetailPage() {
                     ? error.message
                     : "Erro ao carregar responsáveis"
             )
+        }
+    }
+
+    function canEditRisk() {
+        if (!risk || !user) {
+            return false
+        }
+
+        const isResponsible =
+            risk.assignedTo?.id === user.id
+
+        return isAdmin || isResponsible
+    }
+
+    function openEditRiskDialog() {
+        if (!risk) return
+
+        setEditRiskForm({
+            title: risk.title || "",
+            description: risk.description || "",
+            openingReason: risk.openingReason || "",
+            commodity: risk.commodity ? risk.commodity : "none",
+            assignedToId: risk.assignedTo?.id || "none",
+        })
+
+        setEditRiskOpen(true)
+    }
+
+    async function handleUpdateRisk() {
+        if (!risk) return
+
+        try {
+            setSavingRisk(true)
+
+            const res = await fetch(`/api/risk/${risk.id}`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                    title: editRiskForm.title.trim() || null,
+                    description:
+                        editRiskForm.description.trim() || null,
+                    openingReason: editRiskForm.openingReason,
+                    commodity:
+                        editRiskForm.commodity === "none"
+                            ? null
+                            : editRiskForm.commodity,
+                    assignedToId:
+                        editRiskForm.assignedToId === "none"
+                            ? null
+                            : editRiskForm.assignedToId,
+                }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                throw new Error(
+                    data.error || "Erro ao atualizar RM"
+                )
+            }
+
+            toast.success("RM atualizada com sucesso")
+
+            setRisk(data)
+            setEditRiskOpen(false)
+
+            await loadRisk()
+        } catch (error) {
+            console.error(error)
+
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Erro ao atualizar RM"
+            )
+        } finally {
+            setSavingRisk(false)
+        }
+    }
+
+    async function handleWorkflowChange() {
+        if (!risk || !workflowAction) return
+
+        const reason = workflowReason.trim()
+
+        if (!reason) {
+            toast.error("Informe o motivo da alteração")
+            return
+        }
+
+        const nextStatus =
+            workflowAction === "close"
+                ? "CLOSED"
+                : "OPEN"
+
+        try {
+            setSavingWorkflow(true)
+
+            const res = await fetch(`/api/risk/${risk.id}`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                    workflowStatus: nextStatus,
+                    reason,
+                }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                throw new Error(
+                    data.error ||
+                    "Erro ao alterar status da RM"
+                )
+            }
+
+            toast.success(
+                workflowAction === "close"
+                    ? "RM fechada com sucesso"
+                    : "RM reaberta com sucesso"
+            )
+
+            setRisk(data)
+            setWorkflowAction(null)
+            setWorkflowReason("")
+
+            await loadRisk()
+        } catch (error) {
+            console.error(error)
+
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Erro ao alterar status da RM"
+            )
+        } finally {
+            setSavingWorkflow(false)
         }
     }
 
@@ -1657,6 +1843,7 @@ export default function RiskDetailPage() {
                     "status da rm",
                     item.oldStatus,
                     item.newStatus,
+                    item.reason || "",
                     item.user.name,
                     item.user.email,
                     item.changedAt,
@@ -1839,6 +2026,43 @@ export default function RiskDetailPage() {
                                             </p>
                                         </div>
                                     </div>
+
+                                    {canEditRisk() && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={openEditRiskDialog}
+                                            >
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Editar RM
+                                            </Button>
+
+                                            {risk.workflowStatus === "OPEN" && (
+                                                <Button
+                                                    type="button"
+                                                    variant="destructive"
+                                                    onClick={() =>
+                                                        setWorkflowAction("close")
+                                                    }
+                                                >
+                                                    Fechar RM
+                                                </Button>
+                                            )}
+
+                                            {risk.workflowStatus === "CLOSED" && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setWorkflowAction("reopen")
+                                                    }
+                                                >
+                                                    Reabrir RM
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -2152,7 +2376,7 @@ export default function RiskDetailPage() {
                                                                             )}
                                                                         </tr>
 
-                                                                        
+
                                                                     </Fragment>
                                                                 ))}
                                                             </tbody>
@@ -2551,6 +2775,18 @@ export default function RiskDetailPage() {
                                                                                 </p>
                                                                             </div>
 
+                                                                            {history.reason && (
+                                                                                <div className="rounded-md bg-muted/50 p-3">
+                                                                                    <p className="text-muted-foreground">
+                                                                                        Motivo:
+                                                                                    </p>
+
+                                                                                    <p className="mt-1 font-medium">
+                                                                                        {history.reason}
+                                                                                    </p>
+                                                                                </div>
+                                                                            )}
+
                                                                             <p className="text-muted-foreground">
                                                                                 {history.user.name} em{" "}
                                                                                 {formatDate(history.changedAt)}
@@ -2739,6 +2975,275 @@ export default function RiskDetailPage() {
                                         </Card>
                                     </div>
                                 </div>
+
+                                <Dialog
+                                    open={editRiskOpen}
+                                    onOpenChange={(open) => {
+                                        setEditRiskOpen(open)
+                                    }}
+                                >
+                                    <DialogContent className="sm:max-w-2xl">
+                                        <DialogHeader>
+                                            <DialogTitle>
+                                                Editar RM
+                                            </DialogTitle>
+
+                                            <DialogDescription>
+                                                Atualize as informações básicas da RM.
+                                                Alterações ficarão registradas no histórico e nos logs.
+                                            </DialogDescription>
+                                        </DialogHeader>
+
+                                        <div className="space-y-5">
+                                            <div className="space-y-2">
+                                                <Label>Título</Label>
+
+                                                <Input
+                                                    value={editRiskForm.title}
+                                                    onChange={(e) =>
+                                                        setEditRiskForm((prev) => ({
+                                                            ...prev,
+                                                            title: e.target.value,
+                                                        }))
+                                                    }
+                                                    placeholder="Título da RM"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label>Descrição</Label>
+
+                                                <Textarea
+                                                    className="min-h-[90px] resize-none"
+                                                    value={editRiskForm.description}
+                                                    onChange={(e) =>
+                                                        setEditRiskForm((prev) => ({
+                                                            ...prev,
+                                                            description: e.target.value,
+                                                        }))
+                                                    }
+                                                    placeholder="Descrição da RM"
+                                                />
+                                            </div>
+
+                                            <div className="grid gap-4 md:grid-cols-2">
+                                                <div className="space-y-2">
+                                                    <Label>Motivo de abertura</Label>
+
+                                                    <Select
+                                                        value={editRiskForm.openingReason}
+                                                        onValueChange={(value) =>
+                                                            setEditRiskForm((prev) => ({
+                                                                ...prev,
+                                                                openingReason: value,
+                                                            }))
+                                                        }
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Selecione o motivo" />
+                                                        </SelectTrigger>
+
+                                                        <SelectContent>
+                                                            <SelectItem value="TIER_2_CHANGE">
+                                                                Troca ou Adição de Tier 2
+                                                            </SelectItem>
+
+                                                            <SelectItem value="PLANT_CHANGE">
+                                                                Alteração de Planta
+                                                            </SelectItem>
+
+                                                            <SelectItem value="SUPPLIER_TRANSFER_PHASE_OUT">
+                                                                Transferência de Fornecedor (Phase Out)
+                                                            </SelectItem>
+
+                                                            <SelectItem value="MANUFACTURING_PROCESS_CHANGE">
+                                                                Mudança no Processo de Fabricação
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label>Commodity</Label>
+
+                                                    <Select
+                                                        value={editRiskForm.commodity || "none"}
+                                                        onValueChange={(value) =>
+                                                            setEditRiskForm((prev) => ({
+                                                                ...prev,
+                                                                commodity: value,
+                                                            }))
+                                                        }
+                                                    >
+                                                        <SelectTrigger className="w-full">
+                                                            <SelectValue placeholder="Selecione a commodity" />
+                                                        </SelectTrigger>
+
+                                                        <SelectContent>
+                                                            <SelectItem value="none">
+                                                                Sem commodity
+                                                            </SelectItem>
+
+                                                            {commodityOptions.map((commodity) => (
+                                                                <SelectItem
+                                                                    key={commodity}
+                                                                    value={commodity}
+                                                                >
+                                                                    {commodity}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label>Responsável pela RM</Label>
+
+                                                <Select
+                                                    value={editRiskForm.assignedToId}
+                                                    onValueChange={(value) =>
+                                                        setEditRiskForm((prev) => ({
+                                                            ...prev,
+                                                            assignedToId: value,
+                                                        }))
+                                                    }
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Selecione o responsável" />
+                                                    </SelectTrigger>
+
+                                                    <SelectContent>
+                                                        <SelectItem value="none">
+                                                            Sem responsável
+                                                        </SelectItem>
+
+                                                        {users.map((user) => (
+                                                            <SelectItem
+                                                                key={user.id}
+                                                                value={user.id}
+                                                            >
+                                                                {user.name} — {user.email}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <p className="text-xs text-muted-foreground">
+                                                    Se o responsável for alterado, o novo usuário deverá receber uma notificação.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <DialogFooter>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setEditRiskOpen(false)}
+                                                disabled={savingRisk}
+                                            >
+                                                Cancelar
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                onClick={handleUpdateRisk}
+                                                disabled={savingRisk}
+                                            >
+                                                {savingRisk ? (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Save className="mr-2 h-4 w-4" />
+                                                )}
+                                                Salvar alterações
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+
+                                <Dialog
+                                    open={workflowAction !== null}
+                                    onOpenChange={(open) => {
+                                        if (!open) {
+                                            setWorkflowAction(null)
+                                            setWorkflowReason("")
+                                        }
+                                    }}
+                                >
+                                    <DialogContent className="sm:max-w-lg">
+                                        <DialogHeader>
+                                            <DialogTitle>
+                                                {workflowAction === "close"
+                                                    ? "Fechar RM"
+                                                    : "Reabrir RM"}
+                                            </DialogTitle>
+
+                                            <DialogDescription>
+                                                {workflowAction === "close"
+                                                    ? "Informe os detalhes do fechamento da RM."
+                                                    : "Informe os detalhes da reabertura da RM."}
+                                            </DialogDescription>
+                                        </DialogHeader>
+
+                                        <div className="space-y-2">
+                                            <Label>
+                                                Motivo
+                                                <span className="ml-1 text-red-500">*</span>
+                                            </Label>
+
+                                            <Textarea
+                                                className="min-h-[110px] resize-none"
+                                                value={workflowReason}
+                                                onChange={(e) =>
+                                                    setWorkflowReason(e.target.value)
+                                                }
+                                                placeholder={
+                                                    workflowAction === "close"
+                                                        ? "Ex.: RM fechada após mitigação do risco, aprovação do VDA e conclusão das ações necessárias."
+                                                        : "Ex.: RM reaberta devido a nova pendência identificada após acompanhamento do fornecedor."
+                                                }
+                                            />
+
+                                            <p className="text-xs text-muted-foreground">
+                                                Esse motivo será registrado no histórico da RM e nos logs de auditoria.
+                                            </p>
+                                        </div>
+
+                                        <DialogFooter>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setWorkflowAction(null)
+                                                    setWorkflowReason("")
+                                                }}
+                                                disabled={savingWorkflow}
+                                            >
+                                                Cancelar
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                variant={
+                                                    workflowAction === "close"
+                                                        ? "destructive"
+                                                        : "default"
+                                                }
+                                                onClick={handleWorkflowChange}
+                                                disabled={savingWorkflow}
+                                            >
+                                                {savingWorkflow && (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                )}
+
+                                                {workflowAction === "close"
+                                                    ? "Confirmar fechamento"
+                                                    : "Confirmar reabertura"}
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+
                                 <Dialog
                                     open={addPartOpen}
                                     onOpenChange={(open) => {
