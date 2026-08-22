@@ -49,7 +49,7 @@ import {
 
 import { toast } from "sonner"
 
-type RiskLevel = "GREEN" | "YELLOW" | "RED"
+type RiskLevel = "GREEN" | "YELLOW" | "RED" | "BLUE" | "PURPLE" | "ORANGE" | "GRAY"
 
 type RiskWorkflowStatus =
   | "OPEN"
@@ -224,6 +224,12 @@ function getRiskLevelPill(level: RiskLevel) {
       return (
         <Pill backgroundColor="#dc2626">
           Red
+        </Pill>
+      )
+    case "BLUE":
+      return (
+        <Pill backgroundColor="#3b82f6">
+          Blue
         </Pill>
       )
 
