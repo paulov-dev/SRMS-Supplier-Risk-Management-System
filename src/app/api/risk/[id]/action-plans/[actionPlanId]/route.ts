@@ -5,6 +5,9 @@ import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 import { createNotification } from "@/app/api/lib/createNotification"
 
+import { createAuditLog } from "@/app/api/lib/createAuditLog"
+import { getRequestIp } from "@/app/api/lib/request-ip"
+
 function getPermissions(user: any): string[] {
   const permissions = user.roles.flatMap((ur: any) =>
     ur.role.permissions.map((rp: any) =>
@@ -59,16 +62,6 @@ function normalizeIp(ip: string | null) {
   }
 
   return cleanIp
-}
-
-function getRequestIp(req: Request) {
-  const forwardedFor = req.headers.get("x-forwarded-for")
-  const realIp = req.headers.get("x-real-ip")
-  const cfIp = req.headers.get("cf-connecting-ip")
-
-  return normalizeIp(
-    forwardedFor || realIp || cfIp || null
-  )
 }
 
 function toPrismaJsonObject(
@@ -613,71 +606,59 @@ export async function PATCH(
               ? "RISK_ACTION_PLAN_REOPEN"
               : "RISK_ACTION_PLAN_UPDATE"
 
-        await tx.auditLog.create({
-          data: {
-            entityType: "RiskEvent",
-            entityId: risk.id,
-            action: auditAction,
-            changedBy: currentUser.id,
-            ipAddress,
-            oldValue: toPrismaJsonObject({
-              riskEventId: risk.id,
-              riskCode: risk.code,
+        await createAuditLog(tx, {
+          entityType: "RiskEvent",
+          entityId: risk.id,
+          action: auditAction,
+          changedBy: currentUser.id,
+          ipAddress,
+          oldValue: {
+            riskEventId: risk.id,
+            riskCode: risk.code,
 
-              actionPlanId: existingPlan.id,
+            actionPlanId: existingPlan.id,
 
-              riskEventPartId:
-                existingPlan.riskEventPartId,
-              partNumberId:
-                existingPlan.riskEventPart
-                  ?.partNumberId || null,
-              partNumber:
-                existingPlan.riskEventPart
-                  ?.partNumber.partNumber || null,
+            riskEventPartId: existingPlan.riskEventPartId,
+            partNumberId:
+              existingPlan.riskEventPart?.partNumberId || null,
+            partNumber:
+              existingPlan.riskEventPart?.partNumber.partNumber || null,
 
-              description:
-                existingPlan.description,
-              dueDate: existingPlan.dueDate,
+            description: existingPlan.description,
+            dueDate: existingPlan.dueDate,
 
-              assignedToId:
-                existingPlan.assignedToId,
+            assignedToId: existingPlan.assignedToId,
 
-              isCompleted:
-                existingPlan.isCompleted,
-              completedAt:
-                existingPlan.completedAt,
-            }),
-            newValue: toPrismaJsonObject({
-              riskEventId: risk.id,
-              riskCode: risk.code,
+            isCompleted: existingPlan.isCompleted,
+            completedAt: existingPlan.completedAt,
+          },
+          newValue: {
+            riskEventId: risk.id,
+            riskCode: risk.code,
 
-              actionPlanId: plan.id,
+            actionPlanId: plan.id,
 
-              riskEventPartId:
-                plan.riskEventPartId,
-              partNumberId:
-                plan.riskEventPart
-                  ?.partNumberId || null,
-              partNumber:
-                plan.riskEventPart?.partNumber
-                  .partNumber || null,
+            riskEventPartId: plan.riskEventPartId,
+            partNumberId:
+              plan.riskEventPart?.partNumberId || null,
+            partNumber:
+              plan.riskEventPart?.partNumber.partNumber || null,
 
-              description: plan.description,
-              dueDate: plan.dueDate,
+            description: plan.description,
+            dueDate: plan.dueDate,
 
-              assignedToId: plan.assignedToId,
+            assignedToId: plan.assignedToId,
 
-              isCompleted: plan.isCompleted,
-              completedAt: plan.completedAt,
+            isCompleted: plan.isCompleted,
+            completedAt: plan.completedAt,
 
-              changedByUser: {
-                id: currentUser.id,
-                name: currentUser.name,
-                email: currentUser.email,
-              },
+            changedByUser: {
+              id: currentUser.id,
+              name: currentUser.name,
+              email: currentUser.email,
+            },
 
-              userAgent,
-            }),
+            userAgent,
           },
         })
 
@@ -866,47 +847,39 @@ export async function DELETE(
         },
       })
 
-      await tx.auditLog.create({
-        data: {
-          entityType: "RiskEvent",
-          entityId: risk.id,
-          action: "RISK_ACTION_PLAN_DELETE",
-          changedBy: currentUser.id,
-          ipAddress,
-          oldValue: toPrismaJsonObject({
-            riskEventId: risk.id,
-            riskCode: risk.code,
+      await createAuditLog(tx, {
+        entityType: "RiskEvent",
+        entityId: risk.id,
+        action: "RISK_ACTION_PLAN_DELETE",
+        changedBy: currentUser.id,
+        ipAddress,
+        oldValue: {
+          riskEventId: risk.id,
+          riskCode: risk.code,
 
-            actionPlanId: existingPlan.id,
+          actionPlanId: existingPlan.id,
 
-            riskEventPartId:
-              existingPlan.riskEventPartId,
-            partNumberId:
-              existingPlan.riskEventPart
-                ?.partNumberId || null,
-            partNumber:
-              existingPlan.riskEventPart?.partNumber
-                .partNumber || null,
+          riskEventPartId: existingPlan.riskEventPartId,
+          partNumberId:
+            existingPlan.riskEventPart?.partNumberId || null,
+          partNumber:
+            existingPlan.riskEventPart?.partNumber.partNumber || null,
 
-            description: existingPlan.description,
-            dueDate: existingPlan.dueDate,
+          description: existingPlan.description,
+          dueDate: existingPlan.dueDate,
 
-            assignedToId:
-              existingPlan.assignedToId,
+          assignedToId: existingPlan.assignedToId,
 
-            isCompleted:
-              existingPlan.isCompleted,
-            completedAt:
-              existingPlan.completedAt,
+          isCompleted: existingPlan.isCompleted,
+          completedAt: existingPlan.completedAt,
 
-            deletedByUser: {
-              id: currentUser.id,
-              name: currentUser.name,
-              email: currentUser.email,
-            },
+          deletedByUser: {
+            id: currentUser.id,
+            name: currentUser.name,
+            email: currentUser.email,
+          },
 
-            userAgent,
-          }),
+          userAgent,
         },
       })
     })
