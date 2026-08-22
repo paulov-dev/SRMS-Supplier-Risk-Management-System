@@ -643,24 +643,46 @@ function getVisibleAuditObject(value: unknown) {
   return Object.fromEntries(entries)
 }
 
-function AuditValueList({
-  value,
+function getComparableAuditObject(value: unknown) {
+  const object = getFieldsObject(value)
+
+  if (!object) return {}
+
+  const entries = Object.entries(object).filter(([key]) => {
+    if (key === "id") return false
+    if (key === "changedByUser") return false
+    if (key === "deletedByUser") return false
+    if (key === "targetUser") return false
+    if (key === "userAgent") return false
+
+    if (key === "roleIds" && object.roleNames) return false
+    if (key === "addedRoleIds" && object.addedRoleNames) return false
+    if (key === "removedRoleIds" && object.removedRoleNames) return false
+
+    return true
+  })
+
+  return Object.fromEntries(entries)
+}
+
+function AuditChangeList({
+  oldValue,
+  newValue,
 }: {
-  value: unknown
+  oldValue: unknown
+  newValue: unknown
 }) {
-  const visibleValue = getVisibleAuditObject(value)
+  const oldObject = getComparableAuditObject(oldValue)
+  const newObject = getComparableAuditObject(newValue)
 
-  if (!visibleValue) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Nenhum dado registrado.
-      </p>
-    )
-  }
+  const keys = Array.from(
+    new Set([
+      ...Object.keys(oldObject),
+      ...Object.keys(newObject),
+    ])
+  )
 
-  const entries = Object.entries(visibleValue)
-
-  if (entries.length === 0) {
+  if (keys.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         Nenhum dado registrado.
@@ -669,21 +691,44 @@ function AuditValueList({
   }
 
   return (
-    <div className="max-h-[400px] space-y-2 overflow-auto rounded-lg border bg-muted/30 p-3">
-      {entries.map(([key, item]) => (
-        <div
-          key={key}
-          className="rounded-md border bg-background p-3"
-        >
-          <p className="text-xs font-medium text-muted-foreground">
-            {getFieldLabel(key)}
-          </p>
+    <div className="max-h-[60vh] space-y-3 overflow-auto rounded-lg border bg-muted/30 p-2 sm:p-3">
+      {keys.map((key) => {
+        const previousValue = oldObject[key]
+        const nextValue = newObject[key]
 
-          <div className="mt-1 whitespace-pre-wrap break-words text-sm">
-            {formatAuditValue(item)}
+        return (
+          <div
+            key={key}
+            className="rounded-md border bg-background p-3 sm:p-4"
+          >
+            <p className="mb-3 text-sm font-medium">
+              {getFieldLabel(key)}
+            </p>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="min-w-0 rounded-md border bg-muted/40 p-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  Antes
+                </p>
+
+                <p className="whitespace-pre-wrap break-words text-sm">
+                  {formatAuditValue(previousValue)}
+                </p>
+              </div>
+
+              <div className="min-w-0 rounded-md border bg-muted/40 p-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  Depois
+                </p>
+
+                <p className="whitespace-pre-wrap break-words text-sm">
+                  {formatAuditValue(nextValue)}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1295,6 +1340,7 @@ export default function AuditLogsPage() {
                             <td className="px-4 py-3">
                               <div className="space-y-1">
                                 {getActionBadge(log.action)}
+
                               </div>
                             </td>
 
@@ -1374,7 +1420,7 @@ export default function AuditLogsPage() {
                       disabled={
                         loading ||
                         pagination.page >=
-                          pagination.totalPages
+                        pagination.totalPages
                       }
                       onClick={() =>
                         goToPage(pagination.page + 1)
@@ -1397,7 +1443,7 @@ export default function AuditLogsPage() {
               }
             }}
           >
-            <DialogContent className="max-h-[90vh] w-[98vw] max-w-[1400px] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] w-[95vw] overflow-y-auto sm:max-w-[95vw] lg:max-w-5xl xl:max-w-6xl">
               <DialogHeader>
                 <DialogTitle>
                   Detalhes do Audit Log
@@ -1454,9 +1500,6 @@ export default function AuditLogsPage() {
                       <div className="space-y-1">
                         {getActionBadge(selectedLog.action)}
 
-                        <p className="text-xs text-muted-foreground">
-                          {selectedLog.action}
-                        </p>
                       </div>
                     </div>
 
@@ -1471,9 +1514,6 @@ export default function AuditLogsPage() {
                         )}
                       </Badge>
 
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {selectedLog.entityType}
-                      </p>
                     </div>
 
                     <div>
@@ -1485,32 +1525,18 @@ export default function AuditLogsPage() {
                         {getFriendlyEntityLabel(selectedLog)}
                       </p>
 
-                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                        {selectedLog.entityId}
-                      </p>
                     </div>
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="space-y-2">
-                      <p className="font-medium">
-                        Valor anterior
-                      </p>
+                  <div className="space-y-2">
+                    <p className="font-medium">
+                      Alterações registradas
+                    </p>
 
-                      <AuditValueList
-                        value={selectedLog.oldValue}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="font-medium">
-                        Novo valor
-                      </p>
-
-                      <AuditValueList
-                        value={selectedLog.newValue}
-                      />
-                    </div>
+                    <AuditChangeList
+                      oldValue={selectedLog.oldValue}
+                      newValue={selectedLog.newValue}
+                    />
                   </div>
                 </div>
               )}
