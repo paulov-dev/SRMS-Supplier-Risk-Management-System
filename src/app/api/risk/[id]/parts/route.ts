@@ -65,6 +65,24 @@ function toPrismaJsonObject(
   ) as Prisma.InputJsonObject
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+
+  const items: string[] = []
+
+  for (const item of value) {
+    if (typeof item === "string") {
+      const trimmed = item.trim()
+
+      if (trimmed) {
+        items.push(trimmed)
+      }
+    }
+  }
+
+  return Array.from(new Set(items))
+}
+
 function formatRiskPart(part: any) {
   return {
     id: part.id,
@@ -89,6 +107,39 @@ function formatRiskPart(part: any) {
           email: part.assignedTo.email,
         }
       : null,
+
+    vehicleApplications:
+      part.vehicleApplications?.map((application: any) => {
+        const partNumberVehicleApplication =
+          application.partNumberVehicleApplication
+
+        const vehicleModel =
+          partNumberVehicleApplication.vehicleModel
+
+        return {
+          id: application.id,
+          partNumberVehicleApplicationId:
+            application.partNumberVehicleApplicationId,
+          validFrom:
+            partNumberVehicleApplication.validFrom,
+          validTo:
+            partNumberVehicleApplication.validTo,
+          isActive:
+            partNumberVehicleApplication.isActive,
+          notes:
+            partNumberVehicleApplication.notes,
+          vehicleModel: {
+            id: vehicleModel.id,
+            code: vehicleModel.code,
+            name: vehicleModel.name,
+            description: vehicleModel.description,
+            family: {
+              id: vehicleModel.family.id,
+              name: vehicleModel.family.name,
+            },
+          },
+        }
+      }) || [],
   }
 }
 
@@ -99,24 +150,18 @@ function calculateRiskLevelFromPartStatuses(
     return RiskLevel.YELLOW
   }
 
-  // 1. Vermelho se existir qualquer PN vermelho
   if (statuses.includes(PartRiskStatus.RED)) {
     return RiskLevel.RED
   }
 
-  // 2. Amarelo se existir qualquer PN amarelo
-  // e não existir vermelho
   if (statuses.includes(PartRiskStatus.YELLOW)) {
     return RiskLevel.YELLOW
   }
 
-  // 3. Verde se existir qualquer PN verde
-  // e não existir vermelho ou amarelo
   if (statuses.includes(PartRiskStatus.GREEN)) {
     return RiskLevel.GREEN
   }
 
-  // 4. Cinza se todos os PNs forem cancelados
   if (
     statuses.every(
       (status) => status === PartRiskStatus.GREY
@@ -125,7 +170,6 @@ function calculateRiskLevelFromPartStatuses(
     return RiskLevel.GREY
   }
 
-  // 5. Laranja se todos os PNs forem sem demanda
   if (
     statuses.every(
       (status) => status === PartRiskStatus.ORANGE
@@ -134,7 +178,6 @@ function calculateRiskLevelFromPartStatuses(
     return RiskLevel.ORANGE
   }
 
-  // 6. Azul se todos os PNs forem azuis
   if (
     statuses.every(
       (status) => status === PartRiskStatus.BLUE
@@ -143,9 +186,6 @@ function calculateRiskLevelFromPartStatuses(
     return RiskLevel.BLUE
   }
 
-  // 7. Caso misto: cancelado + sem demanda + azul
-  // Não tem risco vermelho/amarelo/verde ativo.
-  // Mantemos como azul por não haver risco ativo.
   return RiskLevel.BLUE
 }
 
@@ -251,6 +291,19 @@ export async function GET(
               email: true,
             },
           },
+          vehicleApplications: {
+            include: {
+              partNumberVehicleApplication: {
+                include: {
+                  vehicleModel: {
+                    include: {
+                      family: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         orderBy: {
           createdAt: "desc",
@@ -313,6 +366,10 @@ export async function POST(
     const { id } = await params
 
     const body = await req.json()
+
+    const vehicleApplicationIds = normalizeStringArray(
+      body.vehicleApplicationIds
+    )
 
     const rawPartNumber =
       typeof body.partNumber === "string"
@@ -439,6 +496,37 @@ export async function POST(
             update: partNumberUpdateData,
           })
 
+        const selectedApplications =
+          vehicleApplicationIds.length > 0
+            ? await tx.partNumberVehicleApplication.findMany({
+                where: {
+                  id: {
+                    in: vehicleApplicationIds,
+                  },
+                  partNumberId: masterPartNumber.id,
+                  isActive: true,
+                  vehicleModel: {
+                    isActive: true,
+                    family: {
+                      isActive: true,
+                    },
+                  },
+                },
+                select: {
+                  id: true,
+                },
+              })
+            : []
+
+        if (
+          selectedApplications.length !==
+          vehicleApplicationIds.length
+        ) {
+          throw new Error(
+            "Uma ou mais aplicações veiculares selecionadas são inválidas para este PN"
+          )
+        }
+
         const createdRiskPart =
           await tx.riskEventPart.create({
             data: {
@@ -448,6 +536,18 @@ export async function POST(
               logisticsStatus:
                 RiskPartLogisticsStatus.NOT_REQUESTED,
               assignedToId,
+              vehicleApplications:
+                selectedApplications.length > 0
+                  ? {
+                      create:
+                        selectedApplications.map(
+                          (application) => ({
+                            partNumberVehicleApplicationId:
+                              application.id,
+                          })
+                        ),
+                    }
+                  : undefined,
             },
             include: {
               partNumber: true,
@@ -456,6 +556,19 @@ export async function POST(
                   id: true,
                   name: true,
                   email: true,
+                },
+              },
+              vehicleApplications: {
+                include: {
+                  partNumberVehicleApplication: {
+                    include: {
+                      vehicleModel: {
+                        include: {
+                          family: true,
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -485,6 +598,10 @@ export async function POST(
                 createdRiskPart.logisticsStatus,
               assignedToId:
                 createdRiskPart.assignedToId,
+              vehicleApplicationIds:
+                selectedApplications.map(
+                  (application) => application.id
+                ),
               changedByUser: {
                 id: currentUser.id,
                 name: currentUser.name,
@@ -511,6 +628,20 @@ export async function POST(
     )
   } catch (error) {
     console.error(error)
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        "Uma ou mais aplicações veiculares selecionadas são inválidas para este PN"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Uma ou mais aplicações veiculares selecionadas são inválidas para este PN",
+        },
+        { status: 400 }
+      )
+    }
 
     if (
       error instanceof

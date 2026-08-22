@@ -302,10 +302,11 @@ model RiskEventPart {
 
   assignedTo User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
 
-  history           RiskEventPartHistory[]
-  actionPlans       RiskActionPlan[]
-  actionPlanHistory RiskActionPlanHistory[]
-  assessment        RiskPartAssessment?
+  history             RiskEventPartHistory[]
+  actionPlans         RiskActionPlan[]
+  actionPlanHistory   RiskActionPlanHistory[]
+  assessment          RiskPartAssessment?
+  vehicleApplications RiskEventPartApplication[]
 
   @@unique([riskEventId, partNumberId])
   @@index([riskEventId])
@@ -478,6 +479,8 @@ model PartNumber {
   riskPartHistory         RiskEventPartHistory[]
   riskActionPlanHistories RiskActionPlanHistory[]
 
+  vehicleApplications PartNumberVehicleApplication[]
+
   @@index([partNumber])
 }
 
@@ -627,6 +630,7 @@ model RiskStatusHistory {
   @@index([changedBy])
   @@index([changedAt])
 }
+
 model Notification {
   id        String   @id @default(uuid())
   userId    String
@@ -644,4 +648,87 @@ model Notification {
   @@index([isRead])
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+model VehicleFamily {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  models VehicleModel[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model VehicleModel {
+  id String @id @default(uuid())
+
+  familyId String
+
+  code        String
+  name        String?
+  description String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  family VehicleFamily @relation(fields: [familyId], references: [id], onDelete: Restrict)
+
+  applications PartNumberVehicleApplication[]
+
+  @@unique([familyId, code])
+  @@index([familyId])
+  @@index([code])
+  @@index([isActive])
+}
+
+model PartNumberVehicleApplication {
+  id String @id @default(uuid())
+
+  partNumberId   String
+  vehicleModelId String
+
+  validFrom DateTime?
+  validTo   DateTime?
+
+  isActive Boolean @default(true)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  partNumber   PartNumber   @relation(fields: [partNumberId], references: [id], onDelete: Cascade)
+  vehicleModel VehicleModel @relation(fields: [vehicleModelId], references: [id], onDelete: Restrict)
+
+  riskEventPartApplications RiskEventPartApplication[]
+
+  @@unique([partNumberId, vehicleModelId, validFrom, validTo])
+  @@index([partNumberId])
+  @@index([vehicleModelId])
+  @@index([validTo])
+  @@index([isActive])
+}
+
+model RiskEventPartApplication {
+  id String @id @default(uuid())
+
+  riskEventPartId                String
+  partNumberVehicleApplicationId String
+
+  createdAt DateTime @default(now())
+
+  riskEventPart RiskEventPart @relation(fields: [riskEventPartId], references: [id], onDelete: Cascade)
+
+  partNumberVehicleApplication PartNumberVehicleApplication @relation(fields: [partNumberVehicleApplicationId], references: [id], onDelete: Cascade)
+
+  @@unique([riskEventPartId, partNumberVehicleApplicationId])
+  @@index([riskEventPartId])
+  @@index([partNumberVehicleApplicationId])
 }

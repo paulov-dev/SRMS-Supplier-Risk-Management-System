@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import {
     PartRiskStatus,
+    Prisma,
     RiskWorkflowStatus,
 } from "@prisma/client"
 
@@ -119,14 +120,26 @@ export async function GET(req: Request) {
         const supplierId =
             searchParams.get("supplierId")?.trim() || "all"
 
+        const vehicleFamilyId =
+            searchParams.get("vehicleFamilyId")?.trim() || "all"
+
+        const vehicleModelId =
+            searchParams.get("vehicleModelId")?.trim() || "all"
+
+        const riskResponsibleId =
+            searchParams.get("riskResponsibleId")?.trim() || "all"
+
+        const pnResponsibleId =
+            searchParams.get("pnResponsibleId")?.trim() || "all"
+
         const onlyOpenRisks =
             searchParams.get("onlyOpenRisks") === "true"
 
         const hasOverdueActions =
             searchParams.get("hasOverdueActions") === "true"
 
-        const parts = await prisma.partNumber.findMany({
-            where: search
+        const partNumberWhere: Prisma.PartNumberWhereInput = {
+            ...(search
                 ? {
                     OR: [
                         {
@@ -141,16 +154,58 @@ export async function GET(req: Request) {
                                 mode: "insensitive",
                             },
                         },
+                    ],
+                }
+                : {}),
+
+            ...(vehicleModelId !== "all"
+                ? {
+                    vehicleApplications: {
+                        some: {
+                            vehicleModelId,
+                        },
+                    },
+                }
+                : vehicleFamilyId !== "all"
+                    ? {
+                        vehicleApplications: {
+                            some: {
+                                vehicleModel: {
+                                    familyId: vehicleFamilyId,
+                                },
+                            },
+                        },
+                    }
+                    : {}),
+        }
+
+        const parts = await prisma.partNumber.findMany({
+            where: partNumberWhere,
+            include: {
+                vehicleApplications: {
+                    include: {
+                        vehicleModel: {
+                            include: {
+                                family: true,
+                            },
+                        },
+                    },
+                    orderBy: [
                         {
-                            vehicleProgram: {
-                                contains: search,
-                                mode: "insensitive",
+                            vehicleModel: {
+                                family: {
+                                    name: "asc",
+                                },
+                            },
+                        },
+                        {
+                            vehicleModel: {
+                                code: "asc",
                             },
                         },
                     ],
-                }
-                : undefined,
-            include: {
+                },
+
                 riskParts: {
                     include: {
                         assignedTo: {
@@ -214,6 +269,20 @@ export async function GET(req: Request) {
                 if (
                     supplierId !== "all" &&
                     riskPart.riskEvent.supplierId !== supplierId
+                ) {
+                    return false
+                }
+
+                if (
+                    riskResponsibleId !== "all" &&
+                    riskPart.riskEvent.assignedToId !== riskResponsibleId
+                ) {
+                    return false
+                }
+
+                if (
+                    pnResponsibleId !== "all" &&
+                    riskPart.assignedToId !== pnResponsibleId
                 ) {
                     return false
                 }
@@ -323,6 +392,25 @@ export async function GET(req: Request) {
                 partNumber: part.partNumber,
                 description: part.description,
                 vehicleProgram: part.vehicleProgram,
+
+                vehicleApplications: part.vehicleApplications.map(
+                    (application) => ({
+                        id: application.id,
+                        validFrom: application.validFrom,
+                        validTo: application.validTo,
+                        isActive: application.isActive,
+                        notes: application.notes,
+                        vehicleModel: {
+                            id: application.vehicleModel.id,
+                            code: application.vehicleModel.code,
+                            name: application.vehicleModel.name,
+                            family: {
+                                id: application.vehicleModel.family.id,
+                                name: application.vehicleModel.family.name,
+                            },
+                        },
+                    })
+                ),
 
                 suppliers,
                 commodities,

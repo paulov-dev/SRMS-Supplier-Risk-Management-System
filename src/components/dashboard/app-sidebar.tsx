@@ -122,6 +122,41 @@ export function AppSidebar({
         ],
       },
       {
+        title: "Cadastros",
+        url: "#",
+        icon: IconDatabase,
+        permission: [
+          "RISK_VIEW",
+          "RISK_CREATE",
+          "RISK_UPDATE",
+          "USER_MANAGE",
+        ],
+        items: [
+          {
+            title: "PNs",
+            url: "/pns",
+            icon: IconListDetails,
+            permission: [
+              "RISK_VIEW",
+              "RISK_CREATE",
+              "RISK_UPDATE",
+              "USER_MANAGE",
+            ],
+          },          
+          {
+            title: "Classes e Modelos",
+            url: "/vehicles",
+            icon: IconDatabase,
+            permission: [
+              "RISK_VIEW",
+              "RISK_CREATE",
+              "RISK_UPDATE",
+              "USER_MANAGE",
+            ],
+          },
+        ],
+      },
+      {
         title: "Fornecedores",
         url: "/suppliers",
         icon: IconFolder,

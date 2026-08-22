@@ -95,12 +95,28 @@ type PartNumberSuggestion = {
     vehicleProgram: string | null
 }
 
+type PartNumberVehicleApplicationOption = {
+    id: string
+    validFrom: string | null
+    validTo: string | null
+    isActive: boolean
+    notes: string | null
+    vehicleModel: {
+        id: string
+        code: string
+        name: string | null
+        description: string | null
+        family: {
+            id: string
+            name: string
+        }
+    }
+}
+
 type AddPartForm = {
     partNumber: string
+    partNumberId: string | null
     description: string
-    vehicleProgram: string
-    status: PartRiskStatus
-    assignedToId: string
 }
 
 type HistoryTypeFilter =
@@ -175,13 +191,13 @@ type EditRiskForm = {
 }
 
 const commodityOptions = [
-  "ELE/QUI",
-  "MET",
-  "PWT",
-  "CAB",
-  "CHA",
-  "MOT",
-  "OUTROS",
+    "ELE/QUI",
+    "MET",
+    "PWT",
+    "CAB",
+    "CHA",
+    "MOT",
+    "OUTROS",
 ]
 
 type LogisticsStatus =
@@ -255,6 +271,24 @@ type RiskDetail = {
             email: string
         } | null
         assessment: RiskPartAssessment | null
+        vehicleApplications?: {
+            id: string
+            partNumberVehicleApplicationId: string
+            validFrom: string | null
+            validTo: string | null
+            isActive: boolean
+            notes: string | null
+            vehicleModel: {
+                id: string
+                code: string
+                name: string | null
+                description: string | null
+                family: {
+                    id: string
+                    name: string
+                }
+            }
+        }[]
     }[]
 
     actionPlans: {
@@ -703,6 +737,34 @@ function getLogisticsStatusPill(status: LogisticsStatus) {
     }
 }
 
+function getPartClasses(part: RiskPartItem) {
+    const classes = part.vehicleApplications
+        ?.map((application) => application.vehicleModel.family.name)
+        .filter(Boolean) || []
+
+    return Array.from(new Set(classes))
+}
+
+function getPartModels(part: RiskPartItem) {
+    const models = part.vehicleApplications
+        ?.map((application) => {
+            const code = application.vehicleModel.code
+            const name = application.vehicleModel.name
+
+            return name ? `${code} - ${name}` : code
+        })
+        .filter(Boolean) || []
+
+    return Array.from(new Set(models))
+}
+
+function normalizePartNumber(value: string | null | undefined) {
+    return String(value || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "")
+}
+
 function formatDate(value: string | null) {
     if (!value) return "-"
 
@@ -1007,6 +1069,7 @@ export default function RiskDetailPage() {
 
     const [addPartOpen, setAddPartOpen] = useState(false)
     const [savingPart, setSavingPart] = useState(false)
+    const [addPartError, setAddPartError] = useState("")
 
     const [historyTypeFilter, setHistoryTypeFilter] =
         useState<HistoryTypeFilter>("ALL")
@@ -1048,10 +1111,8 @@ export default function RiskDetailPage() {
     const [addPartForm, setAddPartForm] =
         useState<AddPartForm>({
             partNumber: "",
+            partNumberId: null,
             description: "",
-            vehicleProgram: "",
-            status: "YELLOW",
-            assignedToId: "none",
         })
 
     const [risk, setRisk] =
@@ -1336,26 +1397,51 @@ export default function RiskDetailPage() {
         }
     }
 
+
     function resetAddPartForm() {
         setAddPartForm({
             partNumber: "",
+            partNumberId: null,
             description: "",
-            vehicleProgram: "",
-            status: "YELLOW",
-            assignedToId: "none",
         })
 
         setPartSuggestions([])
+        setAddPartError("")
+    }
+
+    function findLinkedPart(
+        partNumber: string,
+        partNumberId?: string | null
+    ) {
+        if (!risk) return null
+
+        const normalizedInput = normalizePartNumber(partNumber)
+
+        return (
+            risk.parts.find((part) => {
+                const sameId =
+                    Boolean(partNumberId) &&
+                    part.partNumber.id === partNumberId
+
+                const sameNumber =
+                    normalizePartNumber(part.partNumber.partNumber) ===
+                    normalizedInput
+
+                return sameId || sameNumber
+            }) || null
+        )
     }
 
     function handleSelectPartSuggestion(
         part: PartNumberSuggestion
     ) {
+        setAddPartError("")
+
         setAddPartForm((prev) => ({
             ...prev,
+            partNumberId: part.id,
             partNumber: part.partNumber,
             description: part.description || "",
-            vehicleProgram: part.vehicleProgram || "",
         }))
 
         setPartSuggestions([])
@@ -1364,9 +1450,12 @@ export default function RiskDetailPage() {
     async function handleAddPart() {
         if (!risk) return
 
+        setAddPartError("")
+
         const partNumber = addPartForm.partNumber.trim()
 
         if (!partNumber) {
+            setAddPartError("Informe o número do PN")
             toast.error("Informe o número do PN")
             return
         }
@@ -1386,13 +1475,9 @@ export default function RiskDetailPage() {
                         partNumber,
                         description:
                             addPartForm.description.trim() || null,
-                        vehicleProgram:
-                            addPartForm.vehicleProgram.trim() || null,
-                        status: addPartForm.status,
-                        assignedToId:
-                            addPartForm.assignedToId === "none"
-                                ? null
-                                : addPartForm.assignedToId,
+                        status: "YELLOW",
+                        assignedToId: null,
+                        vehicleProgram: null,
                     }),
                 }
             )
@@ -1400,6 +1485,16 @@ export default function RiskDetailPage() {
             const data = await res.json()
 
             if (!res.ok) {
+                if (res.status === 409) {
+                    const message =
+                        data.error ||
+                        "Este PN já está vinculado a esta RM"
+
+                    setAddPartError(message)
+                    toast.error(message)
+                    return
+                }
+
                 throw new Error(
                     data.error || "Erro ao adicionar PN"
                 )
@@ -1414,11 +1509,13 @@ export default function RiskDetailPage() {
         } catch (error) {
             console.error(error)
 
-            toast.error(
+            const message =
                 error instanceof Error
                     ? error.message
                     : "Erro ao adicionar PN"
-            )
+
+            setAddPartError(message)
+            toast.error(message)
         } finally {
             setSavingPart(false)
         }
@@ -2284,10 +2381,6 @@ export default function RiskDetailPage() {
                                                                     </th>
 
                                                                     <th className="px-4 py-3 text-left">
-                                                                        Programa
-                                                                    </th>
-
-                                                                    <th className="px-4 py-3 text-left">
                                                                         Status
                                                                     </th>
 
@@ -2320,10 +2413,6 @@ export default function RiskDetailPage() {
 
                                                                             <td className="px-4 py-3">
                                                                                 {part.partNumber.description || "-"}
-                                                                            </td>
-
-                                                                            <td className="px-4 py-3">
-                                                                                {part.partNumber.vehicleProgram || "-"}
                                                                             </td>
 
                                                                             <td className="px-4 py-3">
@@ -2564,7 +2653,7 @@ export default function RiskDetailPage() {
                                                         {risk.logistics.map((request) => (
                                                             <div
                                                                 key={request.id}
-                                                                className="rounded-lg border p-4 space-y-3 p-"
+                                                                className="rounded-lg border p-4 space-y-3"
                                                             >
                                                                 <div className="flex items-center justify-between">
                                                                     <p className="font-medium">
@@ -3135,6 +3224,12 @@ export default function RiskDetailPage() {
                                             </div>
                                         </div>
 
+                                        {addPartError && (
+                                            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                                                {addPartError}
+                                            </div>
+                                        )}
+
                                         <DialogFooter>
                                             <Button
                                                 type="button"
@@ -3279,12 +3374,15 @@ export default function RiskDetailPage() {
                                                         className="pl-9"
                                                         placeholder="Digite o PN..."
                                                         value={addPartForm.partNumber}
-                                                        onChange={(e) =>
+                                                        onChange={(e) => {
+                                                            setAddPartError("")
+
                                                             setAddPartForm((prev) => ({
                                                                 ...prev,
                                                                 partNumber: e.target.value,
+                                                                partNumberId: null,
                                                             }))
-                                                        }
+                                                        }}
                                                     />
                                                 </div>
 
@@ -3322,101 +3420,21 @@ export default function RiskDetailPage() {
                                                 )}
                                             </div>
 
-                                            <div className="grid gap-4 md:grid-cols-2">
-                                                <div className="space-y-2">
-                                                    <Label>Descrição</Label>
+                                            <div className="space-y-2">
+                                                <Label>Descrição</Label>
 
-                                                    <Input
-                                                        placeholder="Descrição do PN..."
-                                                        value={addPartForm.description}
-                                                        onChange={(e) =>
-                                                            setAddPartForm((prev) => ({
-                                                                ...prev,
-                                                                description: e.target.value,
-                                                            }))
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <Label>Programa / Veículo</Label>
-
-                                                    <Input
-                                                        placeholder="Ex: Delivery, Constellation..."
-                                                        value={addPartForm.vehicleProgram}
-                                                        onChange={(e) =>
-                                                            setAddPartForm((prev) => ({
-                                                                ...prev,
-                                                                vehicleProgram: e.target.value,
-                                                            }))
-                                                        }
-                                                    />
-                                                </div>
+                                                <Input
+                                                    placeholder="Descrição do PN..."
+                                                    value={addPartForm.description}
+                                                    onChange={(e) =>
+                                                        setAddPartForm((prev) => ({
+                                                            ...prev,
+                                                            description: e.target.value,
+                                                        }))
+                                                    }
+                                                />
                                             </div>
 
-                                            <div className="grid gap-4 md:grid-cols-2">
-                                                <div className="space-y-2">
-                                                    <Label>Status inicial do PN</Label>
-
-                                                    <Select
-                                                        value={addPartForm.status}
-                                                        onValueChange={(value) =>
-                                                            setAddPartForm((prev) => ({
-                                                                ...prev,
-                                                                status: value as PartRiskStatus,
-                                                            }))
-                                                        }
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Selecione o status" />
-                                                        </SelectTrigger>
-
-                                                        <SelectContent>
-                                                            {partStatusOptions.map((option) => (
-                                                                <SelectItem
-                                                                    key={option.value}
-                                                                    value={option.value}
-                                                                >
-                                                                    {option.label} — {option.description}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <Label>Responsável pelo PN</Label>
-
-                                                    <Select
-                                                        value={addPartForm.assignedToId}
-                                                        onValueChange={(value) =>
-                                                            setAddPartForm((prev) => ({
-                                                                ...prev,
-                                                                assignedToId: value,
-                                                            }))
-                                                        }
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Selecione o responsável" />
-                                                        </SelectTrigger>
-
-                                                        <SelectContent>
-                                                            <SelectItem value="none">
-                                                                Sem responsável
-                                                            </SelectItem>
-
-                                                            {users.map((user) => (
-                                                                <SelectItem
-                                                                    key={user.id}
-                                                                    value={user.id}
-                                                                >
-                                                                    {user.name} — {user.email}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            </div>
                                         </div>
 
                                         <DialogFooter>
@@ -3481,95 +3499,11 @@ export default function RiskDetailPage() {
                                                         <Label>Descrição</Label>
 
                                                         <Input
-                                                            placeholder="Descrição do PN..."
                                                             value={editPartForm.description}
-                                                            onChange={(e) =>
-                                                                setEditPartForm((prev) => ({
-                                                                    ...prev,
-                                                                    description: e.target.value,
-                                                                }))
-                                                            }
+                                                            disabled                                                          
                                                         />
                                                     </div>
 
-                                                    <div className="space-y-2">
-                                                        <Label>Programa / Veículo</Label>
-
-                                                        <Input
-                                                            placeholder="Ex: Delivery, Constellation..."
-                                                            value={editPartForm.vehicleProgram}
-                                                            onChange={(e) =>
-                                                                setEditPartForm((prev) => ({
-                                                                    ...prev,
-                                                                    vehicleProgram: e.target.value,
-                                                                }))
-                                                            }
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid gap-4 md:grid-cols-2">
-                                                    <div className="space-y-2">
-                                                        <Label>Status do PN</Label>
-
-                                                        <Select
-                                                            value={editPartForm.status}
-                                                            onValueChange={(value) =>
-                                                                setEditPartForm((prev) => ({
-                                                                    ...prev,
-                                                                    status: value as PartRiskStatus,
-                                                                }))
-                                                            }
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Selecione o status" />
-                                                            </SelectTrigger>
-
-                                                            <SelectContent>
-                                                                {partStatusOptions.map((option) => (
-                                                                    <SelectItem
-                                                                        key={option.value}
-                                                                        value={option.value}
-                                                                    >
-                                                                        {option.label} — {option.description}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-
-                                                    <div className="space-y-2">
-                                                        <Label>Responsável pelo PN</Label>
-
-                                                        <Select
-                                                            value={editPartForm.assignedToId}
-                                                            onValueChange={(value) =>
-                                                                setEditPartForm((prev) => ({
-                                                                    ...prev,
-                                                                    assignedToId: value,
-                                                                }))
-                                                            }
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Selecione o responsável" />
-                                                            </SelectTrigger>
-
-                                                            <SelectContent>
-                                                                <SelectItem value="none">
-                                                                    Sem responsável
-                                                                </SelectItem>
-
-                                                                {users.map((user) => (
-                                                                    <SelectItem
-                                                                        key={user.id}
-                                                                        value={user.id}
-                                                                    >
-                                                                        {user.name} — {user.email}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
                                                 </div>
 
                                                 <div className="rounded-lg border p-4 space-y-4">
