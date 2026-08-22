@@ -6,6 +6,7 @@ import {
 
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
+import { createNotification } from "@/app/api/lib/createNotification"
 
 function getPermissions(user: any): string[] {
   const permissions = user.roles.flatMap((ur: any) =>
@@ -931,15 +932,13 @@ export async function PATCH(
           })
 
           if (nextAssignedToId) {
-            await tx.notification.create({
-              data: {
-                userId: nextAssignedToId,
-                title: "RM atribuída a você",
-                message: `A RM ${currentRisk.code} foi atribuída ao seu nome.`,
-                type: "RISK_ASSIGNED",
-                entity: "RiskEvent",
-                entityId: id,
-              },
+            await createNotification(tx, {
+              userId: nextAssignedToId,
+              title: "RM atribuída a você",
+              message: `A RM ${currentRisk.code} foi atribuída ao seu nome.`,
+              type: "RISK_ASSIGNED",
+              entity: "RiskEvent",
+              entityId: id,
             })
           }
         }
@@ -956,6 +955,30 @@ export async function PATCH(
               reason:
                 "Informações básicas da RM foram alteradas.",
             },
+          })
+        }
+
+        if (
+          isChangingWorkflow &&
+          currentRisk.assignedToId &&
+          currentRisk.assignedToId !== currentUser.id
+        ) {
+          await createNotification(tx, {
+            userId: currentRisk.assignedToId,
+            title:
+              nextWorkflowStatus === "CLOSED"
+                ? "RM fechada"
+                : "RM reaberta",
+            message:
+              nextWorkflowStatus === "CLOSED"
+                ? `A RM ${currentRisk.code} foi fechada.`
+                : `A RM ${currentRisk.code} foi reaberta.`,
+            type:
+              nextWorkflowStatus === "CLOSED"
+                ? "RISK_CLOSED"
+                : "RISK_REOPENED",
+            entity: "RiskEvent",
+            entityId: id,
           })
         }
 
