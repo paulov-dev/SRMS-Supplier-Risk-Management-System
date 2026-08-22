@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
+import { createNotification } from "@/app/api/lib/createNotification"
 
 function getPermissions(user: any): string[] {
   const permissions = user.roles.flatMap((ur: any) =>
@@ -98,37 +99,37 @@ function formatActionPlan(plan: any) {
 
     createdBy: plan.createdBy
       ? {
-          id: plan.createdBy.id,
-          name: plan.createdBy.name,
-          email: plan.createdBy.email,
-        }
+        id: plan.createdBy.id,
+        name: plan.createdBy.name,
+        email: plan.createdBy.email,
+      }
       : null,
 
     assignedTo: plan.assignedTo
       ? {
-          id: plan.assignedTo.id,
-          name: plan.assignedTo.name,
-          email: plan.assignedTo.email,
-        }
+        id: plan.assignedTo.id,
+        name: plan.assignedTo.name,
+        email: plan.assignedTo.email,
+      }
       : null,
 
     riskEventPart: plan.riskEventPart
       ? {
-          id: plan.riskEventPart.id,
-          status: plan.riskEventPart.status,
-          logisticsStatus:
-            plan.riskEventPart.logisticsStatus,
-          partNumber: {
-            id: plan.riskEventPart.partNumber.id,
-            partNumber:
-              plan.riskEventPart.partNumber.partNumber,
-            description:
-              plan.riskEventPart.partNumber.description,
-            vehicleProgram:
-              plan.riskEventPart.partNumber
-                .vehicleProgram,
-          },
-        }
+        id: plan.riskEventPart.id,
+        status: plan.riskEventPart.status,
+        logisticsStatus:
+          plan.riskEventPart.logisticsStatus,
+        partNumber: {
+          id: plan.riskEventPart.partNumber.id,
+          partNumber:
+            plan.riskEventPart.partNumber.partNumber,
+          description:
+            plan.riskEventPart.partNumber.description,
+          vehicleProgram:
+            plan.riskEventPart.partNumber
+              .vehicleProgram,
+        },
+      }
       : null,
   }
 }
@@ -190,41 +191,41 @@ export async function GET(
       )
     }
 
-    const actionPlans =
-      await prisma.riskActionPlan.findMany({
-        where: {
-          riskEventId: id,
-        },
-        include: {
-          riskEventPart: {
-            include: {
-              partNumber: true,
-            },
-          },
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          assignedTo: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
+    const actionPlans = await prisma.riskActionPlan.findMany({
+      where: {
+        riskEventId: id,
+      },
+      include: {
+        riskEventPart: {
+          include: {
+            partNumber: true,
           },
         },
-        orderBy: [
-          {
-            isCompleted: "asc",
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
-          {
-            dueDate: "asc",
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
-        ],
-      })
+        },
+      },
+      orderBy: [
+        {
+          isCompleted: "asc",
+        },
+        {
+          dueDate: "asc",
+        },
+      ],
+    })
+
 
     return NextResponse.json({
       riskEventId: risk.id,
@@ -242,6 +243,7 @@ export async function GET(
       { status: 500 }
     )
   }
+
 }
 
 export async function POST(
@@ -483,33 +485,48 @@ export async function POST(
           },
         })
 
+        if (assignedToId !== currentUser.id) {
+          const pnText = plan.riskEventPart?.partNumber?.partNumber
+            ? ` para o PN ${plan.riskEventPart.partNumber.partNumber}`
+            : ""
+
+          await createNotification(tx, {
+            userId: assignedToId,
+            title: "Plano de ação atribuído a você",
+            message: `Você recebeu um plano de ação${pnText} na RM ${risk.code}: ${plan.description}`,
+            type: "ACTION_PLAN_ASSIGNED",
+            entity: "RiskEvent",
+            entityId: risk.id,
+          })
+        }
+
         await tx.riskActionPlanHistory.create({
-  data: {
-    actionPlanId: plan.id,
-    riskEventId: risk.id,
+          data: {
+            actionPlanId: plan.id,
+            riskEventId: risk.id,
 
-    riskEventPartId,
-    partNumberId: riskPart.partNumberId,
+            riskEventPartId,
+            partNumberId: riskPart.partNumberId,
 
-    changeType: "ACTION_PLAN_CREATE",
+            changeType: "ACTION_PLAN_CREATE",
 
-    oldDescription: null,
-    newDescription: plan.description,
+            oldDescription: null,
+            newDescription: plan.description,
 
-    oldDueDate: null,
-    newDueDate: plan.dueDate,
+            oldDueDate: null,
+            newDueDate: plan.dueDate,
 
-    oldAssignedToId: null,
-    newAssignedToId: plan.assignedToId,
+            oldAssignedToId: null,
+            newAssignedToId: plan.assignedToId,
 
-    oldCompleted: null,
-    newCompleted: plan.isCompleted,
+            oldCompleted: null,
+            newCompleted: plan.isCompleted,
 
-    reason: "Plano de ação criado.",
+            reason: "Plano de ação criado.",
 
-    changedById: currentUser.id,
-  },
-})
+            changedById: currentUser.id,
+          },
+        })
 
         await tx.auditLog.create({
           data: {

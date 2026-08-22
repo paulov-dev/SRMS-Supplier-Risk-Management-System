@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
+import { createNotification } from "@/app/api/lib/createNotification"
 
 function getPermissions(user: any): string[] {
   const permissions = user.roles.flatMap((ur: any) =>
@@ -98,37 +99,37 @@ function formatActionPlan(plan: any) {
 
     createdBy: plan.createdBy
       ? {
-          id: plan.createdBy.id,
-          name: plan.createdBy.name,
-          email: plan.createdBy.email,
-        }
+        id: plan.createdBy.id,
+        name: plan.createdBy.name,
+        email: plan.createdBy.email,
+      }
       : null,
 
     assignedTo: plan.assignedTo
       ? {
-          id: plan.assignedTo.id,
-          name: plan.assignedTo.name,
-          email: plan.assignedTo.email,
-        }
+        id: plan.assignedTo.id,
+        name: plan.assignedTo.name,
+        email: plan.assignedTo.email,
+      }
       : null,
 
     riskEventPart: plan.riskEventPart
       ? {
-          id: plan.riskEventPart.id,
-          status: plan.riskEventPart.status,
-          logisticsStatus:
-            plan.riskEventPart.logisticsStatus,
-          partNumber: {
-            id: plan.riskEventPart.partNumber.id,
-            partNumber:
-              plan.riskEventPart.partNumber.partNumber,
-            description:
-              plan.riskEventPart.partNumber.description,
-            vehicleProgram:
-              plan.riskEventPart.partNumber
-                .vehicleProgram,
-          },
-        }
+        id: plan.riskEventPart.id,
+        status: plan.riskEventPart.status,
+        logisticsStatus:
+          plan.riskEventPart.logisticsStatus,
+        partNumber: {
+          id: plan.riskEventPart.partNumber.id,
+          partNumber:
+            plan.riskEventPart.partNumber.partNumber,
+          description:
+            plan.riskEventPart.partNumber.description,
+          vehicleProgram:
+            plan.riskEventPart.partNumber
+              .vehicleProgram,
+        },
+      }
       : null,
   }
 }
@@ -354,6 +355,8 @@ export async function PATCH(
       updateData.dueDate = dueDate
     }
 
+    let nextAssignedToId: string | null = null
+
     const hasAssignedToId =
       Object.prototype.hasOwnProperty.call(
         body,
@@ -398,6 +401,7 @@ export async function PATCH(
       }
 
       updateData.assignedToId = assignedToId
+      nextAssignedToId = assignedToId
     }
 
     const hasRiskEventPartId =
@@ -408,15 +412,15 @@ export async function PATCH(
 
     let newRiskPart:
       | {
+        id: string
+        partNumberId: string
+        partNumber: {
           id: string
-          partNumberId: string
-          partNumber: {
-            id: string
-            partNumber: string
-            description: string | null
-            vehicleProgram: string | null
-          }
+          partNumber: string
+          description: string | null
+          vehicleProgram: string | null
         }
+      }
       | null = null
 
     if (hasRiskEventPartId) {
@@ -496,7 +500,7 @@ export async function PATCH(
 
     const reason =
       typeof body.reason === "string" &&
-      body.reason.trim()
+        body.reason.trim()
         ? body.reason.trim()
         : null
 
@@ -534,6 +538,30 @@ export async function PATCH(
             },
           },
         })
+
+        const isChangingResponsible =
+          hasAssignedToId &&
+          nextAssignedToId !== null &&
+          nextAssignedToId !== existingPlan.assignedToId
+
+        if (
+          isChangingResponsible &&
+          nextAssignedToId &&
+          nextAssignedToId !== currentUser.id
+        ) {
+          const pnText = plan.riskEventPart?.partNumber?.partNumber
+            ? ` para o PN ${plan.riskEventPart.partNumber.partNumber}`
+            : ""
+
+          await createNotification(tx, {
+            userId: nextAssignedToId,
+            title: "Plano de ação atribuído a você",
+            message: `Você recebeu um plano de ação${pnText} na RM ${risk.code}: ${plan.description}`,
+            type: "ACTION_PLAN_ASSIGNED",
+            entity: "RiskEvent",
+            entityId: risk.id,
+          })
+        }
 
         const changeType = getActionPlanUpdateType(
           existingPlan.isCompleted,
