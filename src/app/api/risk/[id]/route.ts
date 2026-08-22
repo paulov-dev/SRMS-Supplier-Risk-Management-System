@@ -915,10 +915,8 @@ export async function PATCH(
           await tx.riskStatusHistory.create({
             data: {
               riskEventId: id,
-              oldStatus:
-                currentRisk.workflowStatus,
-              newStatus:
-                currentRisk.workflowStatus,
+              oldStatus: currentRisk.workflowStatus,
+              newStatus: currentRisk.workflowStatus,
               changedBy: currentUser.id,
               reason: nextAssignedToId
                 ? `Responsável alterado de ${currentRisk.assignedTo?.name ||
@@ -933,7 +931,7 @@ export async function PATCH(
           })
 
           if (nextAssignedToId) {
-            await (tx as any).notification?.create({
+            await tx.notification.create({
               data: {
                 userId: nextAssignedToId,
                 title: "RM atribuída a você",

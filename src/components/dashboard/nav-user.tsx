@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect, useState } from "react"
+
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 
@@ -52,6 +54,17 @@ function getInitials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
+type NotificationItem = {
+  id: string
+  title: string
+  message: string
+  type: string
+  entity: string | null
+  entityId: string | null
+  isRead: boolean
+  createdAt: string
+}
+
 export function NavUser({
   user,
 }: {
@@ -66,6 +79,15 @@ export function NavUser({
   const { logout } = useAuth()
   const router = useRouter()
 
+  const [notifications, setNotifications] =
+    useState<NotificationItem[]>([])
+
+  const [unreadCount, setUnreadCount] =
+    useState(0)
+
+  const [loadingNotifications, setLoadingNotifications] =
+    useState(false)
+
   const initials = getInitials(user.name)
 
   async function handleLogout() {
@@ -73,6 +95,89 @@ export function NavUser({
 
     router.push("/")
   }
+
+  async function loadNotifications() {
+    try {
+      setLoadingNotifications(true)
+
+      const res = await fetch("/api/notifications", {
+        credentials: "include",
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || "Erro ao carregar notificações"
+        )
+      }
+
+      setNotifications(data.data || [])
+      setUnreadCount(data.unreadCount || 0)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoadingNotifications(false)
+    }
+  }
+
+  async function handleNotificationClick(
+    notification: NotificationItem
+  ) {
+    try {
+      if (!notification.isRead) {
+        await fetch(
+          `/api/notifications/${notification.id}/read`,
+          {
+            method: "PATCH",
+            credentials: "include",
+          }
+        )
+      }
+
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notification.id
+            ? {
+              ...item,
+              isRead: true,
+            }
+            : item
+        )
+      )
+
+      setUnreadCount((current) =>
+        notification.isRead
+          ? current
+          : Math.max(current - 1, 0)
+      )
+
+      if (
+        notification.entity === "RiskEvent" &&
+        notification.entityId
+      ) {
+        router.push(`/rms/${notification.entityId}`)
+        return
+      }
+
+      router.push("/notifications")
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  function formatNotificationDate(value: string) {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value))
+  }
+
+  useEffect(() => {
+    loadNotifications()
+  }, [])
 
   return (
     <SidebarMenu>
@@ -83,20 +188,34 @@ export function NavUser({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg border">
-                <AvatarImage
-                  src={user.avatar || undefined}
-                  alt={user.name}
-                />
+              <div className="relative">
+                <Avatar className="h-8 w-8 rounded-lg border">
+                  <AvatarImage
+                    src={user.avatar || undefined}
+                    alt={user.name}
+                  />
 
-                <AvatarFallback className="rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
+                  <AvatarFallback className="rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-sidebar">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </div>
 
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">
-                  {user.name}
+                <span className="flex items-center gap-2 truncate font-medium">
+                  <span className="truncate">
+                    {user.name}
+                  </span>
+
+                  {unreadCount > 0 && (
+                    <span className="h-2 w-2 rounded-full bg-red-600" />
+                  )}
                 </span>
 
                 <span className="truncate text-xs text-muted-foreground">
@@ -171,8 +290,70 @@ export function NavUser({
                 onSelect={() => router.push("/notifications")}
               >
                 <IconBellRinging className="size-4" />
-                Alertas de risco
+
+                <span className="flex flex-1 items-center justify-between gap-2">
+                  Notificações
+
+                  {unreadCount > 0 && (
+                    <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </span>
               </DropdownMenuItem>
+
+              {notifications.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    Últimas notificações
+                  </DropdownMenuLabel>
+
+                  <div className="max-h-72 overflow-y-auto px-1">
+                    {notifications.slice(0, 5).map((notification) => (
+                      <DropdownMenuItem
+                        key={notification.id}
+                        className="flex cursor-pointer items-start gap-2 rounded-md p-2"
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          handleNotificationClick(notification)
+                        }}
+                      >
+                        <IconBellRinging
+                          className={
+                            notification.isRead
+                              ? "mt-0.5 size-4 text-muted-foreground"
+                              : "mt-0.5 size-4 text-red-600"
+                          }
+                        />
+
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-xs font-medium">
+                              {notification.title}
+                            </p>
+
+                            {!notification.isRead && (
+                              <span className="h-2 w-2 rounded-full bg-red-600" />
+                            )}
+                          </div>
+
+                          <p className="line-clamp-2 text-xs text-muted-foreground">
+                            {notification.message}
+                          </p>
+
+                          <p className="text-[10px] text-muted-foreground">
+                            {formatNotificationDate(
+                              notification.createdAt
+                            )}
+                          </p>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                </>
+              )}
             </DropdownMenuGroup>
 
             <DropdownMenuSeparator />
