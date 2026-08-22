@@ -215,34 +215,30 @@ function getStatusLabel(status: string | null) {
     }
 }
 
-function getWorkflowStatusLabel(status: string) {
-    switch (status) {
-        case "OPEN":
-            return "Aberta"
-
-        case "CLOSED":
-            return "Fechada"
-
-        case "CANCELED":
-            return "Cancelada"
-
-        default:
-            return status
-    }
-}
-
 function formatDate(value: string | null) {
     if (!value) return "-"
+
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return "-"
+    }
 
     return new Intl.DateTimeFormat("pt-BR", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
-    }).format(new Date(value))
+    }).format(date)
 }
 
 function formatDateTime(value: string | null) {
     if (!value) return "-"
+
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return "-"
+    }
 
     return new Intl.DateTimeFormat("pt-BR", {
         day: "2-digit",
@@ -250,7 +246,7 @@ function formatDateTime(value: string | null) {
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
-    }).format(new Date(value))
+    }).format(date)
 }
 
 function UserList({
@@ -431,16 +427,17 @@ export default function PartNumbersPage() {
         useState<FilterState>(initialFilters)
 
     const [loading, setLoading] = useState(true)
+
     const [vehicleFamilies, setVehicleFamilies] =
         useState<VehicleFamilyOption[]>([])
+
+    const [users, setUsers] = useState<UserSummary[]>([])
 
     useEffect(() => {
         loadParts(1, initialFilters)
         loadVehicleFamilies()
         loadUsers()
     }, [])
-
-    const [users, setUsers] = useState<UserSummary[]>([])
 
     function buildSearchParams(
         page: number,
@@ -662,7 +659,7 @@ export default function PartNumbersPage() {
                             </Button>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <Card>
                                 <CardContent className="p-6">
                                     <div className="flex items-center justify-between gap-4">
@@ -794,21 +791,27 @@ export default function PartNumbersPage() {
                                                 <SelectItem value="all">
                                                     Todos
                                                 </SelectItem>
+
                                                 <SelectItem value="RED">
                                                     Vermelho
                                                 </SelectItem>
+
                                                 <SelectItem value="YELLOW">
                                                     Amarelo
                                                 </SelectItem>
+
                                                 <SelectItem value="GREEN">
                                                     Verde
                                                 </SelectItem>
+
                                                 <SelectItem value="ORANGE">
                                                     Laranja
                                                 </SelectItem>
+
                                                 <SelectItem value="GREY">
                                                     Cinza
                                                 </SelectItem>
+
                                                 <SelectItem value="BLUE">
                                                     Azul
                                                 </SelectItem>
@@ -970,6 +973,7 @@ export default function PartNumbersPage() {
                                                 <SelectItem value="false">
                                                     Todas as RMs
                                                 </SelectItem>
+
                                                 <SelectItem value="true">
                                                     Somente RMs abertas
                                                 </SelectItem>
@@ -997,6 +1001,7 @@ export default function PartNumbersPage() {
                                                 <SelectItem value="false">
                                                     Todos
                                                 </SelectItem>
+
                                                 <SelectItem value="true">
                                                     Com plano atrasado
                                                 </SelectItem>
@@ -1126,12 +1131,6 @@ export default function PartNumbersPage() {
                                                                 <p className="max-w-[280px] text-xs text-muted-foreground">
                                                                     {part.description || "-"}
                                                                 </p>
-
-                                                                {part.vehicleProgram && (
-                                                                    <Badge variant="outline">
-                                                                        {part.vehicleProgram}
-                                                                    </Badge>
-                                                                )}
 
                                                                 {part.commodities.length > 0 && (
                                                                     <p className="text-xs text-muted-foreground">
