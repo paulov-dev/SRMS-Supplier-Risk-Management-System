@@ -21,6 +21,11 @@ type NotificationType =
   | "LOGISTICS_REQUEST_REJECTED"
   | "COMMENT_MENTION"
   | "SYSTEM_ALERT"
+  | "USER_PROFILE_UPDATED"
+  | "USER_BLOCKED"
+  | "USER_UNBLOCKED"
+  | "USER_ROLE_ADDED"
+  | "USER_ROLE_REMOVED"
 
 type CreateNotificationInput = {
   userId: string
