@@ -105,6 +105,113 @@ const initialFilters: FilterState = {
   dateTo: "",
 }
 
+function getFriendlyEntityLabel(log: any) {
+  const newValue = log.newValue || {}
+  const oldValue = log.oldValue || {}
+
+  if (log.entityType === "RiskEvent") {
+    const riskCode =
+      newValue.riskCode ||
+      oldValue.riskCode ||
+      newValue.code ||
+      oldValue.code
+
+    if (riskCode) {
+      return riskCode
+    }
+
+    return "RM"
+  }
+
+  if (log.entityType === "RiskEventPart") {
+    const partNumber =
+      newValue.partNumber ||
+      oldValue.partNumber
+
+    if (partNumber) {
+      return `PN ${partNumber}`
+    }
+
+    return "PN"
+  }
+
+  if (log.entityType === "RiskActionPlan") {
+    const description =
+      newValue.description ||
+      oldValue.description
+
+    if (description) {
+      return `Plano: ${description}`
+    }
+
+    return "Plano de ação"
+  }
+
+  if (log.entityType === "User") {
+    const userName =
+      newValue.name ||
+      oldValue.name ||
+      newValue.email ||
+      oldValue.email
+
+    if (userName) {
+      return userName
+    }
+
+    return "Usuário"
+  }
+
+  if (log.entityType === "Supplier") {
+    const supplierName =
+      newValue.name ||
+      oldValue.name ||
+      newValue.supplierName ||
+      oldValue.supplierName
+
+    if (supplierName) {
+      return supplierName
+    }
+
+    return "Fornecedor"
+  }
+
+  return log.entityType
+}
+
+function getEntityTypeLabel(entityType: string) {
+  switch (entityType) {
+    case "RiskEvent":
+      return "RM"
+
+    case "RiskEventPart":
+      return "PN"
+
+    case "RiskActionPlan":
+      return "Plano de ação"
+
+    case "LogisticsRequest":
+      return "Logística"
+
+    case "Supplier":
+      return "Fornecedor"
+
+    case "User":
+      return "Usuário"
+
+    case "Role":
+      return "Perfil"
+
+    case "Permission":
+      return "Permissão"
+
+    case "Notification":
+      return "Notificação"
+
+    default:
+      return entityType
+  }
+}
+
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [users, setUsers] = useState<AuditUser[]>([])
@@ -311,7 +418,7 @@ export default function AuditLogsPage() {
           <Badge variant="destructive">
             DELETE
           </Badge>
-        )   
+        )
 
       case "STATUS_CHANGE":
         return (
@@ -680,7 +787,7 @@ export default function AuditLogsPage() {
                         </th>
 
                         <th className="px-4 py-3 text-left font-medium">
-                          Entity ID
+                          Registro
                         </th>
 
                         <th className="px-4 py-3 text-left font-medium">
@@ -749,14 +856,20 @@ export default function AuditLogsPage() {
 
                             <td className="px-4 py-3">
                               <Badge variant="outline">
-                                {log.entityType}
+                                {getEntityTypeLabel(log.entityType)}
                               </Badge>
                             </td>
 
                             <td className="px-4 py-3">
-                              <span className="font-mono text-xs">
-                                {log.entityId}
-                              </span>
+                              <div className="space-y-1">
+                                <p className="font-medium">
+                                  {getFriendlyEntityLabel(log)}
+                                </p>
+
+                                <p className="text-xs text-muted-foreground">
+                                  {log.entityId}
+                                </p>
+                              </div>
                             </td>
 
                             <td className="px-4 py-3">
@@ -811,7 +924,7 @@ export default function AuditLogsPage() {
                       disabled={
                         loading ||
                         pagination.page >=
-                          pagination.totalPages
+                        pagination.totalPages
                       }
                       onClick={() =>
                         goToPage(pagination.page + 1)
@@ -902,7 +1015,7 @@ export default function AuditLogsPage() {
 
                     <div>
                       <p className="mb-2 text-sm text-muted-foreground">
-                        Entity ID
+                        Registro
                       </p>
 
                       <p className="font-mono text-xs break-all">
