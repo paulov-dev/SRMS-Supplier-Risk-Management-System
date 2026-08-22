@@ -105,77 +105,138 @@ const initialFilters: FilterState = {
   dateTo: "",
 }
 
-function getFriendlyEntityLabel(log: any) {
-  const newValue = log.newValue || {}
-  const oldValue = log.oldValue || {}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  )
+}
 
-  if (log.entityType === "RiskEvent") {
-    const riskCode =
-      newValue.riskCode ||
-      oldValue.riskCode ||
-      newValue.code ||
-      oldValue.code
+function getFieldsObject(value: unknown) {
+  if (!isRecord(value)) return null
 
-    if (riskCode) {
-      return riskCode
-    }
-
-    return "RM"
+  if (
+    isRecord(value.fields)
+  ) {
+    return value.fields
   }
 
-  if (log.entityType === "RiskEventPart") {
-    const partNumber =
-      newValue.partNumber ||
-      oldValue.partNumber
+  return value
+}
 
-    if (partNumber) {
-      return `PN ${partNumber}`
+function getValueFromAuditObject(
+  value: unknown,
+  keys: string[]
+) {
+  const object = getFieldsObject(value)
+
+  if (!object) return null
+
+  for (const key of keys) {
+    const item = object[key]
+
+    if (
+      item !== null &&
+      item !== undefined &&
+      item !== ""
+    ) {
+      return item
     }
-
-    return "PN"
   }
 
-  if (log.entityType === "RiskActionPlan") {
-    const description =
-      newValue.description ||
-      oldValue.description
+  return null
+}
 
-    if (description) {
-      return `Plano: ${description}`
-    }
+function getAuditActionLabel(action: string) {
+  switch (action) {
+    case "CREATE":
+      return "Criado"
 
-    return "Plano de ação"
+    case "UPDATE":
+      return "Atualizado"
+
+    case "DELETE":
+      return "Excluído"
+
+    case "STATUS_CHANGE":
+      return "Status alterado"
+
+    case "ROLE_ASSIGN":
+      return "Cargo atribuído"
+
+    case "PERMISSION_ASSIGN":
+      return "Permissão atribuída"
+
+    case "USER_UPDATE":
+      return "Usuário atualizado"
+
+    case "PASSWORD_CHANGE":
+      return "Senha alterada"
+
+    case "USER_STATUS_CHANGE":
+      return "Status do usuário alterado"
+
+    case "USER_BLOCK":
+      return "Usuário bloqueado"
+
+    case "USER_UNBLOCK":
+      return "Usuário desbloqueado"
+
+    case "USER_ROLE_ADD":
+      return "Cargo adicionado"
+
+    case "USER_ROLE_REMOVE":
+      return "Cargo removido"
+
+    case "RISK_EVENT_CREATE":
+      return "RM criada"
+
+    case "RISK_EVENT_UPDATE":
+      return "RM atualizada"
+
+    case "RISK_EVENT_RESPONSIBLE_UPDATE":
+      return "Responsável da RM alterado"
+
+    case "RISK_EVENT_WORKFLOW_UPDATE":
+      return "Status da RM alterado"
+
+    case "RISK_ACTION_PLAN_CREATE":
+      return "Plano de ação criado"
+
+    case "RISK_ACTION_PLAN_UPDATE":
+      return "Plano de ação atualizado"
+
+    case "RISK_ACTION_PLAN_COMPLETE":
+      return "Plano de ação concluído"
+
+    case "RISK_ACTION_PLAN_REOPEN":
+      return "Plano de ação reaberto"
+
+    case "RISK_ACTION_PLAN_DELETE":
+      return "Plano de ação excluído"
+
+    case "RISK_PART_CREATE":
+      return "PN adicionado"
+
+    case "RISK_PART_UPDATE":
+      return "PN atualizado"
+
+    case "RISK_PART_DELETE":
+      return "PN removido"
+
+    case "LOGISTICS_REQUEST_CREATE":
+      return "Solicitação logística criada"
+
+    case "LOGISTICS_REQUEST_APPROVE":
+      return "Solicitação logística aprovada"
+
+    case "LOGISTICS_REQUEST_REJECT":
+      return "Solicitação logística recusada"
+
+    default:
+      return action
   }
-
-  if (log.entityType === "User") {
-    const userName =
-      newValue.name ||
-      oldValue.name ||
-      newValue.email ||
-      oldValue.email
-
-    if (userName) {
-      return userName
-    }
-
-    return "Usuário"
-  }
-
-  if (log.entityType === "Supplier") {
-    const supplierName =
-      newValue.name ||
-      oldValue.name ||
-      newValue.supplierName ||
-      oldValue.supplierName
-
-    if (supplierName) {
-      return supplierName
-    }
-
-    return "Fornecedor"
-  }
-
-  return log.entityType
 }
 
 function getEntityTypeLabel(entityType: string) {
@@ -199,7 +260,7 @@ function getEntityTypeLabel(entityType: string) {
       return "Usuário"
 
     case "Role":
-      return "Perfil"
+      return "Cargo"
 
     case "Permission":
       return "Permissão"
@@ -210,6 +271,431 @@ function getEntityTypeLabel(entityType: string) {
     default:
       return entityType
   }
+}
+
+function getFieldLabel(field: string) {
+  switch (field) {
+    case "id":
+      return "ID"
+
+    case "name":
+      return "Nome"
+
+    case "email":
+      return "E-mail"
+
+    case "photoUrl":
+      return "Foto"
+
+    case "isActive":
+      return "Usuário ativo"
+
+    case "password":
+      return "Senha"
+
+    case "roleIds":
+      return "IDs dos cargos"
+
+    case "roleNames":
+      return "Cargos"
+
+    case "addedRoleIds":
+      return "IDs dos cargos adicionados"
+
+    case "addedRoleNames":
+      return "Cargos adicionados"
+
+    case "removedRoleIds":
+      return "IDs dos cargos removidos"
+
+    case "removedRoleNames":
+      return "Cargos removidos"
+
+    case "title":
+      return "Título"
+
+    case "description":
+      return "Descrição"
+
+    case "riskCode":
+      return "RM"
+
+    case "code":
+      return "Código"
+
+    case "riskLevel":
+      return "Farol"
+
+    case "workflowStatus":
+      return "Status da RM"
+
+    case "assignedToId":
+      return "ID do responsável"
+
+    case "assignedToName":
+      return "Responsável"
+
+    case "assignedToEmail":
+      return "E-mail do responsável"
+
+    case "commodity":
+      return "Commodity"
+
+    case "openingReason":
+      return "Motivo de abertura"
+
+    case "partNumber":
+      return "PN"
+
+    case "partNumberId":
+      return "ID do PN"
+
+    case "riskEventId":
+      return "ID da RM"
+
+    case "actionPlanId":
+      return "ID do plano de ação"
+
+    case "riskEventPartId":
+      return "ID do PN na RM"
+
+    case "dueDate":
+      return "Prazo"
+
+    case "isCompleted":
+      return "Concluído"
+
+    case "completedAt":
+      return "Data de conclusão"
+
+    case "closedAt":
+      return "Data de fechamento"
+
+    case "closedById":
+      return "Fechado por"
+
+    case "reason":
+      return "Motivo"
+
+    case "changedFields":
+      return "Campos alterados"
+
+    case "changedByUser":
+      return "Alterado por"
+
+    case "deletedByUser":
+      return "Excluído por"
+
+    case "targetUser":
+      return "Usuário alterado"
+
+    case "userAgent":
+      return "Navegador"
+
+    default:
+      return field
+  }
+}
+
+function formatAuditValue(value: unknown): string {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "-"
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Sim" : "Não"
+  }
+
+  if (typeof value === "number") {
+    return String(value)
+  }
+
+  if (typeof value === "string") {
+    switch (value) {
+      case "true":
+        return "Sim"
+
+      case "false":
+        return "Não"
+
+      case "OPEN":
+        return "Aberta"
+
+      case "CLOSED":
+        return "Fechada"
+
+      case "CANCELED":
+        return "Cancelada"
+
+      case "RED":
+        return "Vermelho"
+
+      case "YELLOW":
+        return "Amarelo"
+
+      case "GREEN":
+        return "Verde"
+
+      case "GREY":
+        return "Cinza"
+
+      case "ORANGE":
+        return "Laranja"
+
+      case "BLUE":
+        return "Azul"
+
+      case "TIER_2_CHANGE":
+        return "Alteração Tier 2"
+
+      case "PLANT_CHANGE":
+        return "Alteração de planta"
+
+      case "SUPPLIER_TRANSFER_PHASE_OUT":
+        return "Transferência / Phase out de fornecedor"
+
+      case "MANUFACTURING_PROCESS_CHANGE":
+        return "Alteração de processo produtivo"
+
+      case "UPDATED":
+        return "Atualizada"
+
+      case "********":
+        return "Oculto"
+
+      default:
+        return value
+    }
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "-"
+    }
+
+    return value
+      .map((item) => formatAuditValue(item))
+      .join(", ")
+  }
+
+  if (isRecord(value)) {
+    const name = value.name
+    const email = value.email
+
+    if (
+      typeof name === "string" &&
+      typeof email === "string"
+    ) {
+      return `${name} — ${email}`
+    }
+
+    if (typeof name === "string") {
+      return name
+    }
+
+    if (typeof email === "string") {
+      return email
+    }
+
+    return JSON.stringify(value, null, 2)
+  }
+
+  return String(value)
+}
+
+function getFriendlyEntityLabel(log: AuditLog) {
+  if (log.entityType === "RiskEvent") {
+    const riskCode =
+      getValueFromAuditObject(log.newValue, [
+        "riskCode",
+        "code",
+      ]) ||
+      getValueFromAuditObject(log.oldValue, [
+        "riskCode",
+        "code",
+      ])
+
+    if (riskCode) {
+      return String(riskCode)
+    }
+
+    return "RM"
+  }
+
+  if (log.entityType === "RiskEventPart") {
+    const partNumber =
+      getValueFromAuditObject(log.newValue, [
+        "partNumber",
+      ]) ||
+      getValueFromAuditObject(log.oldValue, [
+        "partNumber",
+      ])
+
+    if (partNumber) {
+      return `PN ${String(partNumber)}`
+    }
+
+    return "PN"
+  }
+
+  if (log.entityType === "RiskActionPlan") {
+    const description =
+      getValueFromAuditObject(log.newValue, [
+        "description",
+      ]) ||
+      getValueFromAuditObject(log.oldValue, [
+        "description",
+      ])
+
+    if (description) {
+      return `Plano: ${String(description)}`
+    }
+
+    return "Plano de ação"
+  }
+
+  if (log.entityType === "User") {
+    const userName =
+      getValueFromAuditObject(log.newValue, [
+        "name",
+      ]) ||
+      getValueFromAuditObject(log.oldValue, [
+        "name",
+      ])
+
+    const userEmail =
+      getValueFromAuditObject(log.newValue, [
+        "email",
+      ]) ||
+      getValueFromAuditObject(log.oldValue, [
+        "email",
+      ])
+
+    if (userName && userEmail) {
+      return `${String(userName)} — ${String(userEmail)}`
+    }
+
+    if (userName) {
+      return String(userName)
+    }
+
+    if (userEmail) {
+      return String(userEmail)
+    }
+
+    return "Usuário"
+  }
+
+  if (log.entityType === "Supplier") {
+    const supplierName =
+      getValueFromAuditObject(log.newValue, [
+        "name",
+        "supplierName",
+      ]) ||
+      getValueFromAuditObject(log.oldValue, [
+        "name",
+        "supplierName",
+      ])
+
+    if (supplierName) {
+      return String(supplierName)
+    }
+
+    return "Fornecedor"
+  }
+
+  return getEntityTypeLabel(log.entityType)
+}
+
+function getVisibleAuditObject(value: unknown) {
+  const object = getFieldsObject(value)
+
+  if (!object) return null
+
+  const entries = Object.entries(object).filter(([key]) => {
+    if (key === "id") return false
+    if (key === "changedByUser") return false
+    if (key === "deletedByUser") return false
+    if (key === "targetUser") return false
+    if (key === "userAgent") return false
+
+    if (key === "roleIds" && object.roleNames) return false
+    if (
+      key === "addedRoleIds" &&
+      object.addedRoleNames
+    ) {
+      return false
+    }
+    if (
+      key === "removedRoleIds" &&
+      object.removedRoleNames
+    ) {
+      return false
+    }
+
+    return true
+  })
+
+  return Object.fromEntries(entries)
+}
+
+function AuditValueList({
+  value,
+}: {
+  value: unknown
+}) {
+  const visibleValue = getVisibleAuditObject(value)
+
+  if (!visibleValue) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Nenhum dado registrado.
+      </p>
+    )
+  }
+
+  const entries = Object.entries(visibleValue)
+
+  if (entries.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Nenhum dado registrado.
+      </p>
+    )
+  }
+
+  return (
+    <div className="max-h-[400px] space-y-2 overflow-auto rounded-lg border bg-muted/30 p-3">
+      {entries.map(([key, item]) => (
+        <div
+          key={key}
+          className="rounded-md border bg-background p-3"
+        >
+          <p className="text-xs font-medium text-muted-foreground">
+            {getFieldLabel(key)}
+          </p>
+
+          <div className="mt-1 whitespace-pre-wrap break-words text-sm">
+            {formatAuditValue(item)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function getActionBadge(action: string) {
+  const label = getAuditActionLabel(action)
+
+  return (
+    <Badge variant="outline">
+      {label}
+    </Badge>
+  )
 }
 
 export default function AuditLogsPage() {
@@ -389,71 +875,23 @@ export default function AuditLogsPage() {
     }).format(new Date(value))
   }
 
-  function formatJson(value: unknown) {
-    if (!value) {
-      return "Sem dados"
-    }
-
-    return JSON.stringify(value, null, 2)
-  }
-
-  function getActionBadge(action: string) {
-    switch (action) {
-      case "CREATE":
-        return (
-          <Badge variant="default">
-            CREATE
-          </Badge>
-        )
-
-      case "UPDATE":
-        return (
-          <Badge variant="outline">
-            UPDATE
-          </Badge>
-        )
-
-      case "DELETE":
-        return (
-          <Badge variant="destructive">
-            DELETE
-          </Badge>
-        )
-
-      case "STATUS_CHANGE":
-        return (
-          <Badge className="bg-yellow-500 text-black">
-            STATUS_CHANGE
-          </Badge>
-        )
-
-      case "ROLE_ASSIGN":
-      case "PERMISSION_ASSIGN":
-        return (
-          <Badge className="bg-purple-600">
-            {action}
-          </Badge>
-        )
-
-      default:
-        return (
-          <Badge variant="outline">
-            {action}
-          </Badge>
-        )
-    }
-  }
-
-  const createCount = logs.filter(
-    (log) => log.action === "CREATE"
+  const createCount = logs.filter((log) =>
+    log.action.includes("CREATE")
   ).length
 
   const updateCount = logs.filter(
-    (log) => log.action === "UPDATE"
+    (log) =>
+      log.action.includes("UPDATE") ||
+      log.action.includes("CHANGE") ||
+      log.action.includes("REOPEN") ||
+      log.action.includes("COMPLETE")
   ).length
 
   const deleteCount = logs.filter(
-    (log) => log.action === "DELETE"
+    (log) =>
+      log.action.includes("DELETE") ||
+      log.action.includes("REMOVE") ||
+      log.action.includes("BLOCK")
   ).length
 
   return (
@@ -464,7 +902,7 @@ export default function AuditLogsPage() {
         <SidebarInset>
           <SiteHeader />
 
-          <div className="p-6 space-y-6">
+          <div className="space-y-6 p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h1 className="text-2xl font-semibold">
@@ -472,14 +910,17 @@ export default function AuditLogsPage() {
                 </h1>
 
                 <p className="text-sm text-muted-foreground">
-                  Visualize alterações realizadas no sistema com filtros por usuário,
-                  ação, entidade e período.
+                  Visualize alterações realizadas no sistema
+                  com filtros por usuário, ação, entidade e
+                  período.
                 </p>
               </div>
 
               <Button
                 variant="outline"
-                onClick={() => loadLogs(pagination.page, filters)}
+                onClick={() =>
+                  loadLogs(pagination.page, filters)
+                }
                 disabled={loading}
               >
                 {loading ? (
@@ -517,7 +958,7 @@ export default function AuditLogsPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">
-                        Creates na página
+                        Criações na página
                       </p>
 
                       <p className="mt-2 text-3xl font-bold">
@@ -537,7 +978,7 @@ export default function AuditLogsPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">
-                        Updates na página
+                        Alterações na página
                       </p>
 
                       <p className="mt-2 text-3xl font-bold">
@@ -557,7 +998,7 @@ export default function AuditLogsPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">
-                        Deletes na página
+                        Remoções/Bloqueios na página
                       </p>
 
                       <p className="mt-2 text-3xl font-bold">
@@ -644,7 +1085,7 @@ export default function AuditLogsPage() {
                             key={action}
                             value={action}
                           >
-                            {action}
+                            {getAuditActionLabel(action)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -678,7 +1119,7 @@ export default function AuditLogsPage() {
                             key={entityType}
                             value={entityType}
                           >
-                            {entityType}
+                            {getEntityTypeLabel(entityType)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -686,7 +1127,7 @@ export default function AuditLogsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>ID da entidade</Label>
+                    <Label>ID ou registro</Label>
 
                     <Input
                       placeholder="Buscar por entityId..."
@@ -828,7 +1269,7 @@ export default function AuditLogsPage() {
                             key={log.id}
                             className="border-b last:border-0 hover:bg-muted/40"
                           >
-                            <td className="px-4 py-3 whitespace-nowrap">
+                            <td className="whitespace-nowrap px-4 py-3">
                               {formatDate(log.createdAt)}
                             </td>
 
@@ -840,7 +1281,8 @@ export default function AuditLogsPage() {
 
                                 <div>
                                   <p className="font-medium">
-                                    {log.user?.name || "Usuário desconhecido"}
+                                    {log.user?.name ||
+                                      "Usuário desconhecido"}
                                   </p>
 
                                   <p className="text-xs text-muted-foreground">
@@ -851,19 +1293,25 @@ export default function AuditLogsPage() {
                             </td>
 
                             <td className="px-4 py-3">
-                              {getActionBadge(log.action)}
+                              <div className="space-y-1">
+                                {getActionBadge(log.action)}
+                              </div>
                             </td>
 
                             <td className="px-4 py-3">
                               <Badge variant="outline">
-                                {getEntityTypeLabel(log.entityType)}
+                                {getEntityTypeLabel(
+                                  log.entityType
+                                )}
                               </Badge>
                             </td>
 
                             <td className="px-4 py-3">
                               <div className="space-y-1">
                                 <p className="font-medium">
-                                  {getFriendlyEntityLabel(log)}
+                                  {getFriendlyEntityLabel(
+                                    log
+                                  )}
                                 </p>
 
                                 <p className="text-xs text-muted-foreground">
@@ -881,7 +1329,9 @@ export default function AuditLogsPage() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setSelectedLog(log)}
+                                onClick={() =>
+                                  setSelectedLog(log)
+                                }
                               >
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver
@@ -924,7 +1374,7 @@ export default function AuditLogsPage() {
                       disabled={
                         loading ||
                         pagination.page >=
-                        pagination.totalPages
+                          pagination.totalPages
                       }
                       onClick={() =>
                         goToPage(pagination.page + 1)
@@ -947,14 +1397,15 @@ export default function AuditLogsPage() {
               }
             }}
           >
-            <DialogContent className="w-[98vw] sm:max-w-350 max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] w-[98vw] max-w-[1400px] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   Detalhes do Audit Log
                 </DialogTitle>
 
                 <DialogDescription>
-                  Visualize os dados anteriores e novos registrados nesta ação.
+                  Visualize os dados anteriores e novos
+                  registrados nesta ação.
                 </DialogDescription>
               </DialogHeader>
 
@@ -962,7 +1413,7 @@ export default function AuditLogsPage() {
                 <div className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
                     <Card>
-                      <CardContent className="p-4 space-y-2">
+                      <CardContent className="space-y-2 p-4">
                         <p className="text-sm text-muted-foreground">
                           Usuário
                         </p>
@@ -978,7 +1429,7 @@ export default function AuditLogsPage() {
                     </Card>
 
                     <Card>
-                      <CardContent className="p-4 space-y-2">
+                      <CardContent className="space-y-2 p-4">
                         <p className="text-sm text-muted-foreground">
                           Data/Hora
                         </p>
@@ -1000,7 +1451,13 @@ export default function AuditLogsPage() {
                         Ação
                       </p>
 
-                      {getActionBadge(selectedLog.action)}
+                      <div className="space-y-1">
+                        {getActionBadge(selectedLog.action)}
+
+                        <p className="text-xs text-muted-foreground">
+                          {selectedLog.action}
+                        </p>
+                      </div>
                     </div>
 
                     <div>
@@ -1009,8 +1466,14 @@ export default function AuditLogsPage() {
                       </p>
 
                       <Badge variant="outline">
-                        {selectedLog.entityType}
+                        {getEntityTypeLabel(
+                          selectedLog.entityType
+                        )}
                       </Badge>
+
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {selectedLog.entityType}
+                      </p>
                     </div>
 
                     <div>
@@ -1018,7 +1481,11 @@ export default function AuditLogsPage() {
                         Registro
                       </p>
 
-                      <p className="font-mono text-xs break-all">
+                      <p className="font-medium">
+                        {getFriendlyEntityLabel(selectedLog)}
+                      </p>
+
+                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                         {selectedLog.entityId}
                       </p>
                     </div>
@@ -1030,9 +1497,9 @@ export default function AuditLogsPage() {
                         Valor anterior
                       </p>
 
-                      <pre className="max-h-[400px] overflow-auto rounded-lg bg-muted p-4 text-xs">
-                        {formatJson(selectedLog.oldValue)}
-                      </pre>
+                      <AuditValueList
+                        value={selectedLog.oldValue}
+                      />
                     </div>
 
                     <div className="space-y-2">
@@ -1040,9 +1507,9 @@ export default function AuditLogsPage() {
                         Novo valor
                       </p>
 
-                      <pre className="max-h-[400px] overflow-auto rounded-lg bg-muted p-4 text-xs">
-                        {formatJson(selectedLog.newValue)}
-                      </pre>
+                      <AuditValueList
+                        value={selectedLog.newValue}
+                      />
                     </div>
                   </div>
                 </div>
