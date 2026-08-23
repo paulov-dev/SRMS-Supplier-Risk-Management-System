@@ -1,24 +1,31 @@
 import { NextResponse } from "next/server"
-import { Prisma } from "@prisma/client"
+import {
+  Prisma,
+  RiskActionPlanPriority,
+  RiskActionPlanStatus,
+  RiskWorkflowStatus,
+} from "@prisma/client"
 
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 import { createNotification } from "@/app/api/lib/createNotification"
 
 function getPermissions(user: any): string[] {
-  const permissions = user.roles.flatMap((ur: any) =>
-    ur.role.permissions.map((rp: any) =>
-      String(rp.permission.name)
-    )
-  )
+  const permissions =
+    user.roles?.flatMap((ur: any) =>
+      ur.role.permissions.map((rp: any) =>
+        String(rp.permission.name)
+      )
+    ) || []
 
   return Array.from(new Set<string>(permissions))
 }
 
 function getRoleNames(user: any): string[] {
-  const roles = user.roles.map((ur: any) =>
-    String(ur.role.name)
-  )
+  const roles =
+    user.roles?.map((ur: any) =>
+      String(ur.role.name)
+    ) || []
 
   return Array.from(new Set<string>(roles))
 }
@@ -79,20 +86,47 @@ function toPrismaJsonObject(
   ) as Prisma.InputJsonObject
 }
 
+function isValidPriority(value: unknown) {
+  return Object.values(RiskActionPlanPriority).includes(
+    value as RiskActionPlanPriority
+  )
+}
+
 function formatActionPlan(plan: any) {
   const now = new Date()
+
+  const dueDate = plan.dueDate
+    ? new Date(plan.dueDate)
+    : null
+
+  const isOverdue =
+    dueDate !== null &&
+    dueDate < now &&
+    ![
+      RiskActionPlanStatus.COMPLETED,
+      RiskActionPlanStatus.CANCELED,
+    ].includes(plan.status)
 
   return {
     id: plan.id,
 
+    title: plan.title,
     description: plan.description,
+    requiredAction: plan.requiredAction,
+    responsibleArea: plan.responsibleArea,
+
     dueDate: plan.dueDate,
 
-    isCompleted: plan.isCompleted,
-    completedAt: plan.completedAt,
+    priority: plan.priority,
+    status: plan.status,
 
-    isOverdue:
-      !plan.isCompleted && new Date(plan.dueDate) < now,
+    submittedAt: plan.submittedAt,
+    validatedAt: plan.validatedAt,
+
+    evidenceUrl: plan.evidenceUrl,
+    closingNotes: plan.closingNotes,
+
+    isOverdue,
 
     createdAt: plan.createdAt,
     updatedAt: plan.updatedAt,
@@ -113,6 +147,14 @@ function formatActionPlan(plan: any) {
       }
       : null,
 
+    validatedBy: plan.validatedBy
+      ? {
+        id: plan.validatedBy.id,
+        name: plan.validatedBy.name,
+        email: plan.validatedBy.email,
+      }
+      : null,
+
     riskEventPart: plan.riskEventPart
       ? {
         id: plan.riskEventPart.id,
@@ -122,9 +164,11 @@ function formatActionPlan(plan: any) {
         partNumber: {
           id: plan.riskEventPart.partNumber.id,
           partNumber:
-            plan.riskEventPart.partNumber.partNumber,
+            plan.riskEventPart.partNumber
+              .partNumber,
           description:
-            plan.riskEventPart.partNumber.description,
+            plan.riskEventPart.partNumber
+              .description,
           vehicleProgram:
             plan.riskEventPart.partNumber
               .vehicleProgram,
@@ -133,6 +177,35 @@ function formatActionPlan(plan: any) {
       : null,
   }
 }
+
+const actionPlanInclude = {
+  riskEventPart: {
+    include: {
+      partNumber: true,
+    },
+  },
+  createdBy: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+  assignedTo: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+  validatedBy: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+} satisfies Prisma.RiskActionPlanInclude
 
 export async function GET(
   _req: Request,
@@ -191,41 +264,24 @@ export async function GET(
       )
     }
 
-    const actionPlans = await prisma.riskActionPlan.findMany({
-      where: {
-        riskEventId: id,
-      },
-      include: {
-        riskEventPart: {
-          include: {
-            partNumber: true,
+    const actionPlans =
+      await prisma.riskActionPlan.findMany({
+        where: {
+          riskEventId: id,
+        },
+        include: actionPlanInclude,
+        orderBy: [
+          {
+            status: "asc",
           },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+          {
+            dueDate: "asc",
           },
-        },
-        assignedTo: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+          {
+            createdAt: "desc",
           },
-        },
-      },
-      orderBy: [
-        {
-          isCompleted: "asc",
-        },
-        {
-          dueDate: "asc",
-        },
-      ],
-    })
-
+        ],
+      })
 
     return NextResponse.json({
       riskEventId: risk.id,
@@ -233,17 +289,23 @@ export async function GET(
       data: actionPlans.map(formatActionPlan),
     })
   } catch (error) {
-    console.error(error)
+    console.error(
+      "Erro ao listar planos de ação:",
+      error
+    )
 
     return NextResponse.json(
       {
         error:
           "Erro ao listar planos de ação",
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     )
   }
-
 }
 
 export async function POST(
@@ -284,12 +346,26 @@ export async function POST(
     }
 
     const { id } = await params
-
     const body = await req.json()
+
+    const title =
+      typeof body.title === "string"
+        ? body.title.trim()
+        : ""
 
     const description =
       typeof body.description === "string"
-        ? body.description.trim()
+        ? body.description.trim() || null
+        : null
+
+    const requiredAction =
+      typeof body.requiredAction === "string"
+        ? body.requiredAction.trim()
+        : ""
+
+    const responsibleArea =
+      typeof body.responsibleArea === "string"
+        ? body.responsibleArea.trim()
         : ""
 
     const assignedToId =
@@ -307,11 +383,36 @@ export async function POST(
         ? body.dueDate.trim()
         : ""
 
-    if (!description) {
+    const priorityRaw =
+      typeof body.priority === "string"
+        ? body.priority.trim()
+        : RiskActionPlanPriority.MEDIUM
+
+    if (!title) {
       return NextResponse.json(
         {
           error:
-            "Descrição do plano de ação é obrigatória",
+            "Título do plano de ação é obrigatório",
+        },
+        { status: 400 }
+      )
+    }
+
+    if (!requiredAction) {
+      return NextResponse.json(
+        {
+          error:
+            "Ação necessária do plano de ação é obrigatória",
+        },
+        { status: 400 }
+      )
+    }
+
+    if (!responsibleArea) {
+      return NextResponse.json(
+        {
+          error:
+            "Área responsável é obrigatória",
         },
         { status: 400 }
       )
@@ -359,6 +460,19 @@ export async function POST(
       )
     }
 
+    if (!isValidPriority(priorityRaw)) {
+      return NextResponse.json(
+        {
+          error:
+            "Prioridade do plano de ação inválida",
+        },
+        { status: 400 }
+      )
+    }
+
+    const priority =
+      priorityRaw as RiskActionPlanPriority
+
     const risk = await prisma.riskEvent.findUnique({
       where: {
         id,
@@ -379,7 +493,7 @@ export async function POST(
       )
     }
 
-    if (risk.workflowStatus !== "OPEN") {
+    if (risk.workflowStatus !== RiskWorkflowStatus.OPEN) {
       return NextResponse.json(
         {
           error:
@@ -399,7 +513,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "Somente o dono da RM ou um admin pode criar plano de ação",
+            "Somente quem abriu a RM, o responsável pela RM ou um admin pode criar plano de ação",
         },
         { status: 403 }
       )
@@ -432,6 +546,8 @@ export async function POST(
       },
       select: {
         id: true,
+        name: true,
+        email: true,
         isActive: true,
       },
     })
@@ -453,47 +569,40 @@ export async function POST(
 
     const createdActionPlan =
       await prisma.$transaction(async (tx) => {
-        const plan = await tx.riskActionPlan.create({
-          data: {
-            riskEventId: risk.id,
-            riskEventPartId,
-            description,
-            dueDate,
-            createdById: currentUser.id,
-            assignedToId,
-          },
-          include: {
-            riskEventPart: {
-              include: {
-                partNumber: true,
-              },
+        const plan =
+          await tx.riskActionPlan.create({
+            data: {
+              riskEventId: risk.id,
+              riskEventPartId,
+
+              title,
+              description,
+              requiredAction,
+              responsibleArea,
+
+              dueDate,
+
+              priority,
+              status:
+                RiskActionPlanStatus.OPEN,
+
+              createdById: currentUser.id,
+              assignedToId,
             },
-            createdBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-            assignedTo: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        })
+            include: actionPlanInclude,
+          })
 
         if (assignedToId !== currentUser.id) {
-          const pnText = plan.riskEventPart?.partNumber?.partNumber
-            ? ` para o PN ${plan.riskEventPart.partNumber.partNumber}`
-            : ""
+          const pnText =
+            plan.riskEventPart?.partNumber
+              ?.partNumber
+              ? ` para o PN ${plan.riskEventPart.partNumber.partNumber}`
+              : ""
 
           await createNotification(tx, {
             userId: assignedToId,
             title: "Plano de ação atribuído a você",
-            message: `Você recebeu um plano de ação${pnText} na RM ${risk.code}: ${plan.description}`,
+            message: `Você recebeu um plano de ação${pnText} na RM ${risk.code}: ${plan.title}`,
             type: "ACTION_PLAN_ASSIGNED",
             entity: "RiskEvent",
             entityId: risk.id,
@@ -508,19 +617,44 @@ export async function POST(
             riskEventPartId,
             partNumberId: riskPart.partNumberId,
 
-            changeType: "ACTION_PLAN_CREATE",
+            changeType:
+              "ACTION_PLAN_CREATE",
+
+            oldTitle: null,
+            newTitle: plan.title,
 
             oldDescription: null,
-            newDescription: plan.description,
+            newDescription:
+              plan.description,
+
+            oldRequiredAction: null,
+            newRequiredAction:
+              plan.requiredAction,
+
+            oldResponsibleArea: null,
+            newResponsibleArea:
+              plan.responsibleArea,
 
             oldDueDate: null,
             newDueDate: plan.dueDate,
 
-            oldAssignedToId: null,
-            newAssignedToId: plan.assignedToId,
+            oldPriority: null,
+            newPriority: plan.priority,
 
-            oldCompleted: null,
-            newCompleted: plan.isCompleted,
+            oldStatus: null,
+            newStatus: plan.status,
+
+            oldAssignedToId: null,
+            newAssignedToId:
+              plan.assignedToId,
+
+            oldEvidenceUrl: null,
+            newEvidenceUrl:
+              plan.evidenceUrl,
+
+            oldClosingNotes: null,
+            newClosingNotes:
+              plan.closingNotes,
 
             reason: "Plano de ação criado.",
 
@@ -530,8 +664,8 @@ export async function POST(
 
         await tx.auditLog.create({
           data: {
-            entityType: "RiskEvent",
-            entityId: risk.id,
+            entityType: "RiskActionPlan",
+            entityId: plan.id,
             action: "RISK_ACTION_PLAN_CREATE",
             changedBy: currentUser.id,
             ipAddress,
@@ -542,15 +676,38 @@ export async function POST(
               actionPlanId: plan.id,
 
               riskEventPartId,
-              partNumberId: riskPart.partNumberId,
+              partNumberId:
+                riskPart.partNumberId,
               partNumber:
-                riskPart.partNumber.partNumber,
+                riskPart.partNumber
+                  .partNumber,
 
-              description: plan.description,
+              title: plan.title,
+              description:
+                plan.description,
+              requiredAction:
+                plan.requiredAction,
+              responsibleArea:
+                plan.responsibleArea,
+
               dueDate: plan.dueDate,
 
-              assignedToId: plan.assignedToId,
-              createdById: plan.createdById,
+              priority: plan.priority,
+              status: plan.status,
+
+              assignedToId:
+                plan.assignedToId,
+              assignedTo: assignedUser
+                ? {
+                  id: assignedUser.id,
+                  name: assignedUser.name,
+                  email:
+                    assignedUser.email,
+                }
+                : null,
+
+              createdById:
+                plan.createdById,
 
               changedByUser: {
                 id: currentUser.id,
@@ -575,12 +732,19 @@ export async function POST(
       { status: 201 }
     )
   } catch (error) {
-    console.error(error)
+    console.error(
+      "Erro ao criar plano de ação:",
+      error
+    )
 
     return NextResponse.json(
       {
         error:
           "Erro ao criar plano de ação",
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     )

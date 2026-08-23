@@ -70,6 +70,15 @@ function getNotificationTypeLabel(type: string) {
         case "ACTION_PLAN_ASSIGNED":
             return "Plano atribuído"
 
+        case "ACTION_PLAN_SUBMITTED":
+            return "Plano enviado para validação"
+
+        case "ACTION_PLAN_VALIDATED":
+            return "Plano validado"
+
+        case "ACTION_PLAN_REOPENED":
+            return "Plano reaberto"
+
         case "ACTION_PLAN_OVERDUE":
             return "Plano atrasado"
 
@@ -79,11 +88,23 @@ function getNotificationTypeLabel(type: string) {
         case "LOGISTICS_REQUEST_CREATED":
             return "Solicitação logística"
 
+        case "LOGISTICS_REQUEST_IN_REVIEW":
+            return "Logística em análise"
+
         case "LOGISTICS_REQUEST_APPROVED":
             return "Logística aprovada"
 
         case "LOGISTICS_REQUEST_REJECTED":
             return "Logística recusada"
+
+        case "LOGISTICS_REQUEST_CANCELED":
+            return "Logística cancelada"
+
+        case "COMMENT_MENTION":
+            return "Menção em comentário"
+
+        case "SYSTEM_ALERT":
+            return "Alerta do sistema"
 
         case "USER_PROFILE_UPDATED":
             return "Usuário atualizado"
@@ -108,7 +129,7 @@ function getNotificationTypeLabel(type: string) {
 function getNotificationIcon(type: string) {
     if (
         type.startsWith("RISK") ||
-        type === "RISK_ASSIGNED"
+        type.startsWith("ACTION_PLAN")
     ) {
         return (
             <ClipboardList className="h-5 w-5 text-muted-foreground" />
@@ -118,6 +139,42 @@ function getNotificationIcon(type: string) {
     return (
         <Bell className="h-5 w-5 text-muted-foreground" />
     )
+}
+
+function getNotificationHref(notification: NotificationItem) {
+    if (!notification.entity || !notification.entityId) {
+        return null
+    }
+
+    if (notification.entity === "RiskEvent") {
+        return `/rms/${notification.entityId}`
+    }
+
+    if (notification.entity === "User") {
+        return `/users/${notification.entityId}`
+    }
+
+    return null
+}
+
+function getNotificationDestinationText(
+    notification: NotificationItem
+) {
+    if (
+        notification.entity === "RiskEvent" &&
+        notification.entityId
+    ) {
+        return "Clique para abrir a RM relacionada."
+    }
+
+    if (
+        notification.entity === "User" &&
+        notification.entityId
+    ) {
+        return "Clique para abrir o usuário relacionado."
+    }
+
+    return "Essa notificação ainda não possui destino configurado."
 }
 
 export default function NotificationsPage() {
@@ -189,7 +246,7 @@ export default function NotificationsPage() {
         if (!res.ok) {
             throw new Error(
                 data.error ||
-                "Erro ao marcar notificação como lida"
+                    "Erro ao marcar notificação como lida"
             )
         }
 
@@ -197,9 +254,9 @@ export default function NotificationsPage() {
             current.map((item) =>
                 item.id === notification.id
                     ? {
-                        ...item,
-                        isRead: true,
-                    }
+                          ...item,
+                          isRead: true,
+                      }
                     : item
             )
         )
@@ -217,27 +274,10 @@ export default function NotificationsPage() {
 
             await markNotificationAsRead(notification)
 
-            if (
-                notification.entity === "RiskEvent" &&
-                notification.entityId
-            ) {
-                router.push(`/rms/${notification.entityId}`)
-                return
-            }
+            const href = getNotificationHref(notification)
 
-            if (
-                notification.entity === "User" &&
-                notification.entityId
-            ) {
-                router.push(`/users/${notification.entityId}`)
-                return
-            }
-
-            if (
-                notification.entity === "User" &&
-                notification.entityId
-            ) {
-                router.push(`/users/${notification.entityId}`)
+            if (href) {
+                router.push(href)
                 return
             }
 
@@ -271,7 +311,7 @@ export default function NotificationsPage() {
             if (!res.ok) {
                 throw new Error(
                     data.error ||
-                    "Erro ao marcar notificações como lidas"
+                        "Erro ao marcar notificações como lidas"
                 )
             }
 
@@ -351,7 +391,8 @@ export default function NotificationsPage() {
                                     variant="outline"
                                     onClick={handleMarkAllAsRead}
                                     disabled={
-                                        markingAllAsRead || unreadCount === 0
+                                        markingAllAsRead ||
+                                        unreadCount === 0
                                     }
                                 >
                                     {markingAllAsRead ? (
@@ -437,8 +478,8 @@ export default function NotificationsPage() {
                                                             <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                                                                 {openingNotificationId ===
                                                                     notification.id && (
-                                                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                                                    )}
+                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                )}
 
                                                                 {formatDate(
                                                                     notification.createdAt
@@ -450,13 +491,11 @@ export default function NotificationsPage() {
                                                             {notification.message}
                                                         </p>
 
-                                                        {notification.entity ===
-                                                            "RiskEvent" &&
-                                                            notification.entityId && (
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    Clique para abrir a RM relacionada.
-                                                                </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {getNotificationDestinationText(
+                                                                notification
                                                             )}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </button>

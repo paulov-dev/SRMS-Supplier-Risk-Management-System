@@ -68,11 +68,30 @@ import { toast } from "sonner"
 
 type ActionPlanItem = RiskDetail["actionPlans"][number]
 
+type ActionPlanStatus =
+    | "OPEN"
+    | "IN_PROGRESS"
+    | "WAITING_VALIDATION"
+    | "COMPLETED"
+    | "CANCELED"
+
+type ActionPlanPriority =
+    | "LOW"
+    | "MEDIUM"
+    | "HIGH"
+    | "CRITICAL"
+
 type ActionPlanForm = {
+    title: string
     description: string
+    requiredAction: string
+    responsibleArea: string
     dueDate: string
+    priority: ActionPlanPriority
     assignedToId: string
     riskEventPartId: string
+    evidenceUrl: string
+    closingNotes: string
 }
 
 type RiskLevel =
@@ -322,19 +341,50 @@ type RiskDetail = {
 
     actionPlans: {
         id: string
-        description: string
-        dueDate: string
-        isCompleted: boolean
-        completedAt: string | null
+
+        title: string
+        description: string | null
+        requiredAction: string | null
+        responsibleArea: string | null
+
+        dueDate: string | null
+
+        priority: ActionPlanPriority
+        status: ActionPlanStatus
+
+        submittedAt: string | null
+        validatedAt: string | null
+
+        evidenceUrl: string | null
+        closingNotes: string | null
+
         isOverdue: boolean
+
+        createdAt: string
+        updatedAt: string
+
+        createdBy: {
+            id: string
+            name: string
+            email: string
+        } | null
+
         assignedTo: {
             id: string
             name: string
             email: string
-        }
+        } | null
+
+        validatedBy: {
+            id: string
+            name: string
+            email: string
+        } | null
+
         riskEventPart?: {
             id: string
             status: PartRiskStatus
+            logisticsStatus?: string
             partNumber: {
                 id: string
                 partNumber: string
@@ -820,6 +870,99 @@ function getLogisticsStatusPill(status: LogisticsStatus) {
     }
 }
 
+function getActionPlanStatusPill(status: ActionPlanStatus, isOverdue?: boolean) {
+    if (isOverdue && !["COMPLETED", "CANCELED"].includes(status)) {
+        return (
+            <Pill backgroundColor="#dc2626">
+                Vencido
+            </Pill>
+        )
+    }
+
+    switch (status) {
+        case "OPEN":
+            return (
+                <Pill backgroundColor="#2563eb">
+                    Aberto
+                </Pill>
+            )
+
+        case "IN_PROGRESS":
+            return (
+                <Pill backgroundColor="#eab308" color="#000000">
+                    Em andamento
+                </Pill>
+            )
+
+        case "WAITING_VALIDATION":
+            return (
+                <Pill backgroundColor="#7c3aed">
+                    Aguardando validação
+                </Pill>
+            )
+
+        case "COMPLETED":
+            return (
+                <Pill backgroundColor="#16a34a">
+                    Concluído
+                </Pill>
+            )
+
+        case "CANCELED":
+            return (
+                <Pill backgroundColor="#6b7280">
+                    Cancelado
+                </Pill>
+            )
+
+        default:
+            return (
+                <Pill backgroundColor="#525252">
+                    {status}
+                </Pill>
+            )
+    }
+}
+
+function getActionPlanPriorityPill(priority: ActionPlanPriority) {
+    switch (priority) {
+        case "LOW":
+            return (
+                <Pill backgroundColor="#16a34a">
+                    Baixa
+                </Pill>
+            )
+
+        case "MEDIUM":
+            return (
+                <Pill backgroundColor="#2563eb">
+                    Média
+                </Pill>
+            )
+
+        case "HIGH":
+            return (
+                <Pill backgroundColor="#f97316">
+                    Alta
+                </Pill>
+            )
+
+        case "CRITICAL":
+            return (
+                <Pill backgroundColor="#dc2626">
+                    Crítica
+                </Pill>
+            )
+
+        default:
+            return (
+                <Pill backgroundColor="#525252">
+                    {priority}
+                </Pill>
+            )
+    }
+}
+
 function getPartClasses(part: RiskPartItem) {
     const classes = part.vehicleApplications
         ?.map((application) => application.vehicleModel.family.name)
@@ -1131,6 +1274,24 @@ export default function RiskDetailPage() {
         useState<ActionPlanItem | null>(null)
 
     const [
+        submitValidationPlan,
+        setSubmitValidationPlan,
+    ] = useState<ActionPlanItem | null>(null)
+
+    const [
+        submitValidationForm,
+        setSubmitValidationForm,
+    ] = useState({
+        evidenceUrl: "",
+        closingNotes: "",
+    })
+
+    const [
+        submittingValidation,
+        setSubmittingValidation,
+    ] = useState(false)
+
+    const [
         updatingActionPlanId,
         setUpdatingActionPlanId,
     ] = useState<string | null>(null)
@@ -1142,10 +1303,16 @@ export default function RiskDetailPage() {
 
     const [actionPlanForm, setActionPlanForm] =
         useState<ActionPlanForm>({
+            title: "",
             description: "",
+            requiredAction: "",
+            responsibleArea: "",
             dueDate: "",
+            priority: "MEDIUM",
             assignedToId: "none",
             riskEventPartId: "none",
+            evidenceUrl: "",
+            closingNotes: "",
         })
 
     const [logisticsRequestOpen, setLogisticsRequestOpen] =
@@ -1332,10 +1499,13 @@ export default function RiskDetailPage() {
             return false
         }
 
+        const isCreator =
+            risk.createdBy?.id === user.id
+
         const isResponsible =
             risk.assignedTo?.id === user.id
 
-        return isAdmin || isResponsible
+        return isAdmin || isCreator || isResponsible
     }
 
     function canManageRiskOperationalActions() {
@@ -1779,10 +1949,16 @@ export default function RiskDetailPage() {
         setSelectedActionPlan(null)
 
         setActionPlanForm({
+            title: "",
             description: "",
+            requiredAction: "",
+            responsibleArea: "",
             dueDate: "",
+            priority: "MEDIUM",
             assignedToId: "none",
             riskEventPartId: "none",
+            evidenceUrl: "",
+            closingNotes: "",
         })
     }
 
@@ -1795,29 +1971,124 @@ export default function RiskDetailPage() {
         setSelectedActionPlan(plan)
 
         setActionPlanForm({
-            description: plan.description,
+            title: plan.title || "",
+            description: plan.description || "",
+            requiredAction: plan.requiredAction || "",
+            responsibleArea: plan.responsibleArea || "",
             dueDate: toDateInputValue(plan.dueDate),
+            priority: plan.priority || "MEDIUM",
             assignedToId: plan.assignedTo?.id || "none",
             riskEventPartId: plan.riskEventPart?.id || "none",
+            evidenceUrl: plan.evidenceUrl || "",
+            closingNotes: plan.closingNotes || "",
         })
 
         setActionPlanOpen(true)
     }
 
+    function openSubmitValidationDialog(plan: ActionPlanItem) {
+        setSubmitValidationPlan(plan)
+
+        setSubmitValidationForm({
+            evidenceUrl: plan.evidenceUrl || "",
+            closingNotes: plan.closingNotes || "",
+        })
+    }
+
+    async function handleSubmitActionPlanValidation() {
+        if (!risk || !submitValidationPlan) return
+
+        const evidenceUrl =
+            submitValidationForm.evidenceUrl.trim()
+
+        const closingNotes =
+            submitValidationForm.closingNotes.trim()
+
+        if (!evidenceUrl && !closingNotes) {
+            toast.error(
+                "Informe um link de evidência ou uma observação de fechamento"
+            )
+            return
+        }
+
+        try {
+            setSubmittingValidation(true)
+            setUpdatingActionPlanId(submitValidationPlan.id)
+
+            const res = await fetch(
+                `/api/risk/${risk.id}/action-plans/${submitValidationPlan.id}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action: "SUBMIT_VALIDATION",
+                        evidenceUrl: evidenceUrl || null,
+                        closingNotes: closingNotes || null,
+                    }),
+                }
+            )
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                throw new Error(
+                    data.error ||
+                    "Erro ao enviar plano para validação"
+                )
+            }
+
+            toast.success(
+                "Plano de ação enviado para validação"
+            )
+
+            setSubmitValidationPlan(null)
+            setSubmitValidationForm({
+                evidenceUrl: "",
+                closingNotes: "",
+            })
+
+            await loadRisk()
+        } catch (error) {
+            console.error(error)
+
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Erro ao enviar plano para validação"
+            )
+        } finally {
+            setSubmittingValidation(false)
+            setUpdatingActionPlanId(null)
+        }
+    }
+
     async function handleSaveActionPlan() {
         if (!risk) return
 
-        const description =
-            actionPlanForm.description.trim()
-
+        const title = actionPlanForm.title.trim()
+        const description = actionPlanForm.description.trim()
+        const requiredAction = actionPlanForm.requiredAction.trim()
+        const responsibleArea = actionPlanForm.responsibleArea.trim()
         const dueDate = actionPlanForm.dueDate
-
+        const priority = actionPlanForm.priority
         const assignedToId = actionPlanForm.assignedToId
-
         const riskEventPartId = actionPlanForm.riskEventPartId
 
-        if (!description) {
-            toast.error("Informe a descrição do plano de ação")
+        if (!title) {
+            toast.error("Informe o título do plano de ação")
+            return
+        }
+
+        if (!requiredAction) {
+            toast.error("Informe a ação necessária")
+            return
+        }
+
+        if (!responsibleArea) {
+            toast.error("Informe a área responsável")
             return
         }
 
@@ -1827,16 +2098,12 @@ export default function RiskDetailPage() {
         }
 
         if (!assignedToId || assignedToId === "none") {
-            toast.error(
-                "Informe o responsável pelo plano de ação"
-            )
+            toast.error("Informe o responsável pelo plano de ação")
             return
         }
 
         if (!riskEventPartId || riskEventPartId === "none") {
-            toast.error(
-                "Informe o PN vinculado ao plano de ação"
-            )
+            toast.error("Informe o PN vinculado ao plano de ação")
             return
         }
 
@@ -1856,10 +2123,19 @@ export default function RiskDetailPage() {
                 },
                 credentials: "include",
                 body: JSON.stringify({
-                    description,
+                    action: "UPDATE",
+                    title,
+                    description: description || null,
+                    requiredAction,
+                    responsibleArea,
                     dueDate,
+                    priority,
                     assignedToId,
                     riskEventPartId,
+                    evidenceUrl:
+                        actionPlanForm.evidenceUrl.trim() || null,
+                    closingNotes:
+                        actionPlanForm.closingNotes.trim() || null,
                 }),
             })
 
@@ -1895,8 +2171,14 @@ export default function RiskDetailPage() {
         }
     }
 
-    async function handleToggleActionPlanCompleted(
-        plan: ActionPlanItem
+    async function handleActionPlanAction(
+        plan: ActionPlanItem,
+        action:
+            | "START"
+            | "SUBMIT_VALIDATION"
+            | "VALIDATE"
+            | "REOPEN"
+            | "CANCEL"
     ) {
         if (!risk) return
 
@@ -1912,7 +2194,9 @@ export default function RiskDetailPage() {
                     },
                     credentials: "include",
                     body: JSON.stringify({
-                        isCompleted: !plan.isCompleted,
+                        action,
+                        evidenceUrl: plan.evidenceUrl || null,
+                        closingNotes: plan.closingNotes || null,
                     }),
                 }
             )
@@ -1926,11 +2210,16 @@ export default function RiskDetailPage() {
                 )
             }
 
-            toast.success(
-                plan.isCompleted
-                    ? "Plano de ação reaberto"
-                    : "Plano de ação concluído"
-            )
+            const messages: Record<typeof action, string> = {
+                START: "Plano de ação iniciado",
+                SUBMIT_VALIDATION:
+                    "Plano de ação enviado para validação",
+                VALIDATE: "Plano de ação validado com sucesso",
+                REOPEN: "Plano de ação reaberto",
+                CANCEL: "Plano de ação cancelado",
+            }
+
+            toast.success(messages[action])
 
             await loadRisk()
         } catch (error) {
@@ -2750,12 +3039,19 @@ export default function RiskDetailPage() {
                                         <Card>
                                             <CardHeader>
                                                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                                    <CardTitle className="flex items-center gap-2">
-                                                        <ClipboardList className="h-5 w-5" />
-                                                        Planos de Ação
-                                                    </CardTitle>
+                                                    <div>
+                                                        <CardTitle className="flex items-center gap-2">
+                                                            <ClipboardList className="h-5 w-5" />
+                                                            Planos de Ação
+                                                        </CardTitle>
 
-                                                    {risk.workflowStatus === "OPEN" && canManageRiskOperationalActions() && 
+                                                        <CardDescription>
+                                                            Acompanhe ações, responsáveis, prazos e validações.
+                                                        </CardDescription>
+                                                    </div>
+
+                                                    {risk.workflowStatus === "OPEN" &&
+                                                        canManageRiskOperationalActions() &&
                                                         (isAdmin || isRiskOwner) && (
                                                             <Button
                                                                 type="button"
@@ -2789,117 +3085,299 @@ export default function RiskDetailPage() {
                                                             )}
                                                     </div>
                                                 ) : (
-                                                    <div className="space-y-3">
-                                                        {risk.actionPlans.map((plan) => (
-                                                            <div
-                                                                key={plan.id}
-                                                                className="rounded-lg border p-4"
-                                                            >
-                                                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                                                    <div className="space-y-1">
-                                                                        <p className="font-medium">
-                                                                            {plan.description}
-                                                                        </p>
+                                                    <div className="space-y-4">
+                                                        {risk.actionPlans.map((plan) => {
+                                                            const isPlanResponsible =
+                                                                user?.id &&
+                                                                plan.assignedTo?.id === user.id
 
-                                                                        <p className="text-sm text-muted-foreground">
-                                                                            PN:{" "}
-                                                                            {plan.riskEventPart?.partNumber.partNumber || "-"}
-                                                                        </p>
+                                                            const canManagePlan =
+                                                                isAdmin || isRiskOwner
 
-                                                                        <p className="text-sm text-muted-foreground">
-                                                                            Responsável:{" "}
-                                                                            {plan.assignedTo?.name || "-"}
-                                                                        </p>
+                                                            const canExecutePlan =
+                                                                canManagePlan || isPlanResponsible
 
-                                                                        <p className="text-sm text-muted-foreground">
-                                                                            Prazo:{" "}
-                                                                            {formatDateOnly(plan.dueDate)}
-                                                                        </p>
-                                                                    </div>
+                                                            return (
+                                                                <div
+                                                                    key={plan.id}
+                                                                    className="rounded-lg border p-4"
+                                                                >
+                                                                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                                                        <div className="min-w-0 space-y-3">
+                                                                            <div className="space-y-1">
+                                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                                    {getActionPlanStatusPill(
+                                                                                        plan.status,
+                                                                                        plan.isOverdue
+                                                                                    )}
 
-                                                                    <div className="flex flex-col gap-2 md:items-end">
-                                                                        <div className="flex flex-wrap gap-2">
-                                                                            {plan.isCompleted ? (
-                                                                                <Pill backgroundColor="#16a34a">
-                                                                                    Concluído
-                                                                                </Pill>
-                                                                            ) : plan.isOverdue ? (
-                                                                                <Pill backgroundColor="#dc2626">
-                                                                                    Atrasado
-                                                                                </Pill>
-                                                                            ) : (
-                                                                                <Pill backgroundColor="#2563eb">
-                                                                                    No prazo
-                                                                                </Pill>
+                                                                                    {getActionPlanPriorityPill(
+                                                                                        plan.priority
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <p className="font-semibold">
+                                                                                    {plan.title}
+                                                                                </p>
+
+                                                                                {plan.description && (
+                                                                                    <p className="text-sm text-muted-foreground">
+                                                                                        {plan.description}
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+
+                                                                            <div className="grid gap-3 text-sm md:grid-cols-2">
+                                                                                <p>
+                                                                                    <span className="text-muted-foreground">
+                                                                                        PN:
+                                                                                    </span>{" "}
+                                                                                    {plan.riskEventPart?.partNumber
+                                                                                        .partNumber || "-"}
+                                                                                </p>
+
+                                                                                <p>
+                                                                                    <span className="text-muted-foreground">
+                                                                                        Responsável:
+                                                                                    </span>{" "}
+                                                                                    {plan.assignedTo?.name || "-"}
+                                                                                </p>
+
+                                                                                <p>
+                                                                                    <span className="text-muted-foreground">
+                                                                                        Área:
+                                                                                    </span>{" "}
+                                                                                    {plan.responsibleArea || "-"}
+                                                                                </p>
+
+                                                                                <p>
+                                                                                    <span className="text-muted-foreground">
+                                                                                        Prazo:
+                                                                                    </span>{" "}
+                                                                                    {formatDateOnly(plan.dueDate)}
+                                                                                </p>
+
+                                                                                <p>
+                                                                                    <span className="text-muted-foreground">
+                                                                                        Enviado em:
+                                                                                    </span>{" "}
+                                                                                    {formatDateOnly(plan.submittedAt)}
+                                                                                </p>
+
+                                                                                <p>
+                                                                                    <span className="text-muted-foreground">
+                                                                                        Validado por:
+                                                                                    </span>{" "}
+                                                                                    {plan.validatedBy?.name || "-"}
+                                                                                </p>
+                                                                            </div>
+
+                                                                            {plan.requiredAction && (
+                                                                                <div className="rounded-md bg-muted/50 p-3 text-sm">
+                                                                                    <p className="text-muted-foreground">
+                                                                                        Ação necessária:
+                                                                                    </p>
+
+                                                                                    <p className="mt-1 font-medium">
+                                                                                        {plan.requiredAction}
+                                                                                    </p>
+                                                                                </div>
                                                                             )}
+
+                                                                            {(plan.evidenceUrl ||
+                                                                                plan.closingNotes) && (
+                                                                                    <div className="rounded-md border p-3 text-sm">
+                                                                                        {plan.evidenceUrl && (
+                                                                                            <p>
+                                                                                                <span className="text-muted-foreground">
+                                                                                                    Evidência:
+                                                                                                </span>{" "}
+                                                                                                <a
+                                                                                                    href={
+                                                                                                        plan.evidenceUrl
+                                                                                                    }
+                                                                                                    target="_blank"
+                                                                                                    rel="noreferrer"
+                                                                                                    className="text-blue-600 underline"
+                                                                                                >
+                                                                                                    Abrir link
+                                                                                                </a>
+                                                                                            </p>
+                                                                                        )}
+
+                                                                                        {plan.closingNotes && (
+                                                                                            <p className="mt-2">
+                                                                                                <span className="text-muted-foreground">
+                                                                                                    Observação:
+                                                                                                </span>{" "}
+                                                                                                {plan.closingNotes}
+                                                                                            </p>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
                                                                         </div>
 
                                                                         {risk.workflowStatus === "OPEN" &&
                                                                             canManageActionPlan(plan) && (
-                                                                                <div className="flex flex-wrap justify-end gap-2">
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        variant="outline"
-                                                                                        size="sm"
-                                                                                        onClick={() =>
-                                                                                            handleToggleActionPlanCompleted(
-                                                                                                plan
-                                                                                            )
-                                                                                        }
-                                                                                        disabled={
-                                                                                            updatingActionPlanId === plan.id
-                                                                                        }
-                                                                                    >
-                                                                                        {updatingActionPlanId ===
-                                                                                            plan.id ? (
-                                                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                                                        ) : (
-                                                                                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                                                                                <div className="flex flex-wrap justify-end gap-2 md:max-w-[260px]">
+                                                                                    {plan.status === "OPEN" &&
+                                                                                        canExecutePlan && (
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                onClick={() =>
+                                                                                                    handleActionPlanAction(
+                                                                                                        plan,
+                                                                                                        "START"
+                                                                                                    )
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    updatingActionPlanId ===
+                                                                                                    plan.id
+                                                                                                }
+                                                                                            >
+                                                                                                {updatingActionPlanId ===
+                                                                                                    plan.id ? (
+                                                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                                                ) : (
+                                                                                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                                                                                )}
+                                                                                                Iniciar
+                                                                                            </Button>
                                                                                         )}
 
-                                                                                        {plan.isCompleted
-                                                                                            ? "Reabrir"
-                                                                                            : "Concluir"}
-                                                                                    </Button>
-
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        variant="outline"
-                                                                                        size="sm"
-                                                                                        onClick={() =>
-                                                                                            openEditActionPlanDialog(plan)
-                                                                                        }
-                                                                                    >
-                                                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                                                        Editar
-                                                                                    </Button>
-
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        variant="outline"
-                                                                                        size="sm"
-                                                                                        onClick={() =>
-                                                                                            handleDeleteActionPlan(plan)
-                                                                                        }
-                                                                                        disabled={
-                                                                                            deletingActionPlanId === plan.id
-                                                                                        }
-                                                                                    >
-                                                                                        {deletingActionPlanId ===
-                                                                                            plan.id ? (
-                                                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                                                        ) : (
-                                                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                                                    {(plan.status === "OPEN" ||
+                                                                                        plan.status ===
+                                                                                        "IN_PROGRESS") &&
+                                                                                        canExecutePlan && (
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                onClick={() =>
+                                                                                                    openSubmitValidationDialog(plan)
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    updatingActionPlanId === plan.id
+                                                                                                }
+                                                                                            >
+                                                                                                Enviar validação
+                                                                                            </Button>
                                                                                         )}
 
-                                                                                        Excluir
-                                                                                    </Button>
+                                                                                    {plan.status ===
+                                                                                        "WAITING_VALIDATION" &&
+                                                                                        canManagePlan && (
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                size="sm"
+                                                                                                onClick={() =>
+                                                                                                    handleActionPlanAction(
+                                                                                                        plan,
+                                                                                                        "VALIDATE"
+                                                                                                    )
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    updatingActionPlanId ===
+                                                                                                    plan.id
+                                                                                                }
+                                                                                            >
+                                                                                                Validar
+                                                                                            </Button>
+                                                                                        )}
+
+                                                                                    {plan.status === "COMPLETED" &&
+                                                                                        canManagePlan && (
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                onClick={() =>
+                                                                                                    handleActionPlanAction(
+                                                                                                        plan,
+                                                                                                        "REOPEN"
+                                                                                                    )
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    updatingActionPlanId ===
+                                                                                                    plan.id
+                                                                                                }
+                                                                                            >
+                                                                                                Reabrir
+                                                                                            </Button>
+                                                                                        )}
+
+                                                                                    {plan.status !== "COMPLETED" &&
+                                                                                        plan.status !== "CANCELED" &&
+                                                                                        canManagePlan && (
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                onClick={() =>
+                                                                                                    openEditActionPlanDialog(
+                                                                                                        plan
+                                                                                                    )
+                                                                                                }
+                                                                                            >
+                                                                                                <Pencil className="mr-2 h-4 w-4" />
+                                                                                                Editar
+                                                                                            </Button>
+                                                                                        )}
+
+                                                                                    {plan.status !== "COMPLETED" &&
+                                                                                        plan.status !== "CANCELED" &&
+                                                                                        canManagePlan && (
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                onClick={() =>
+                                                                                                    handleActionPlanAction(
+                                                                                                        plan,
+                                                                                                        "CANCEL"
+                                                                                                    )
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    updatingActionPlanId ===
+                                                                                                    plan.id
+                                                                                                }
+                                                                                            >
+                                                                                                Cancelar
+                                                                                            </Button>
+                                                                                        )}
+
+                                                                                    {canManagePlan && (
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            onClick={() =>
+                                                                                                handleDeleteActionPlan(
+                                                                                                    plan
+                                                                                                )
+                                                                                            }
+                                                                                            disabled={
+                                                                                                deletingActionPlanId ===
+                                                                                                plan.id
+                                                                                            }
+                                                                                        >
+                                                                                            {deletingActionPlanId ===
+                                                                                                plan.id ? (
+                                                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                                            ) : (
+                                                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                                            )}
+                                                                                            Excluir
+                                                                                        </Button>
+                                                                                    )}
                                                                                 </div>
                                                                             )}
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        ))}
+                                                            )
+                                                        })}
                                                     </div>
                                                 )}
                                             </CardContent>
@@ -3381,6 +3859,125 @@ export default function RiskDetailPage() {
                                         </Card>
                                     </div>
                                 </div>
+
+                                <Dialog
+                                    open={Boolean(submitValidationPlan)}
+                                    onOpenChange={(open) => {
+                                        if (!open) {
+                                            setSubmitValidationPlan(null)
+                                            setSubmitValidationForm({
+                                                evidenceUrl: "",
+                                                closingNotes: "",
+                                            })
+                                        }
+                                    }}
+                                >
+                                    <DialogContent className="sm:max-w-2xl">
+                                        <DialogHeader>
+                                            <DialogTitle>
+                                                Enviar plano para validação
+                                            </DialogTitle>
+
+                                            <DialogDescription>
+                                                Informe uma evidência, anexo ou comentário para justificar a conclusão do plano de ação.
+                                            </DialogDescription>
+                                        </DialogHeader>
+
+                                        <div className="space-y-5">
+                                            {submitValidationPlan && (
+                                                <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+                                                    <p className="font-medium">
+                                                        {submitValidationPlan.title}
+                                                    </p>
+
+                                                    <p className="mt-1 text-muted-foreground">
+                                                        PN:{" "}
+                                                        {submitValidationPlan.riskEventPart
+                                                            ?.partNumber.partNumber || "-"}
+                                                    </p>
+
+                                                    <p className="mt-1 text-muted-foreground">
+                                                        Responsável:{" "}
+                                                        {submitValidationPlan.assignedTo?.name ||
+                                                            "-"}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-2">
+                                                <Label>
+                                                    Evidência/anexo ou link
+                                                </Label>
+
+                                                <Input
+                                                    placeholder="Ex.: link do SharePoint, Teams, Drive, evidência, documento..."
+                                                    value={submitValidationForm.evidenceUrl}
+                                                    onChange={(e) =>
+                                                        setSubmitValidationForm((prev) => ({
+                                                            ...prev,
+                                                            evidenceUrl: e.target.value,
+                                                        }))
+                                                    }
+                                                />
+
+                                                <p className="text-xs text-muted-foreground">
+                                                    Pode ser um link para arquivo, imagem, evidência, e-mail ou documento de comprovação.
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label>
+                                                    Comentário / observação de fechamento
+                                                </Label>
+
+                                                <Textarea
+                                                    className="min-h-[110px] resize-none"
+                                                    placeholder="Descreva o que foi realizado, resultado obtido, pendências ou justificativa para validação..."
+                                                    value={submitValidationForm.closingNotes}
+                                                    onChange={(e) =>
+                                                        setSubmitValidationForm((prev) => ({
+                                                            ...prev,
+                                                            closingNotes: e.target.value,
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                                                Após o envio, o plano ficará com status{" "}
+                                                <strong>Aguardando validação</strong> até que o responsável pela RM ou administrador valide a conclusão.
+                                            </div>
+                                        </div>
+
+                                        <DialogFooter>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setSubmitValidationPlan(null)
+                                                    setSubmitValidationForm({
+                                                        evidenceUrl: "",
+                                                        closingNotes: "",
+                                                    })
+                                                }}
+                                                disabled={submittingValidation}
+                                            >
+                                                Cancelar
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                onClick={handleSubmitActionPlanValidation}
+                                                disabled={submittingValidation}
+                                            >
+                                                {submittingValidation && (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                )}
+                                                Enviar para validação
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
 
                                 <Dialog
                                     open={logisticsRequestOpen}
@@ -4423,7 +5020,7 @@ export default function RiskDetailPage() {
                                         }
                                     }}
                                 >
-                                    <DialogContent className="sm:max-w-2xl">
+                                    <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
                                         <DialogHeader>
                                             <DialogTitle>
                                                 {selectedActionPlan
@@ -4432,20 +5029,35 @@ export default function RiskDetailPage() {
                                             </DialogTitle>
 
                                             <DialogDescription>
-                                                Cadastre uma ação, prazo e responsável para acompanhamento dentro da RM.
+                                                Cadastre a ação necessária, responsável, prazo e dados de acompanhamento.
                                             </DialogDescription>
                                         </DialogHeader>
 
                                         <div className="space-y-5">
                                             <div className="space-y-2">
                                                 <Label>
-                                                    Descrição da ação
+                                                    Título
                                                     <span className="ml-1 text-red-500">*</span>
                                                 </Label>
 
+                                                <Input
+                                                    placeholder="Ex.: Validar plano de contingência do fornecedor"
+                                                    value={actionPlanForm.title}
+                                                    onChange={(e) =>
+                                                        setActionPlanForm((prev) => ({
+                                                            ...prev,
+                                                            title: e.target.value,
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label>Descrição</Label>
+
                                                 <Textarea
-                                                    className="min-h-[90px] resize-none"
-                                                    placeholder="Descreva a ação necessária..."
+                                                    className="min-h-[80px] resize-none"
+                                                    placeholder="Contextualize o motivo ou detalhe do plano..."
                                                     value={actionPlanForm.description}
                                                     onChange={(e) =>
                                                         setActionPlanForm((prev) => ({
@@ -4456,7 +5068,26 @@ export default function RiskDetailPage() {
                                                 />
                                             </div>
 
-                                            <div className="grid gap-4 md:grid-cols-3">
+                                            <div className="space-y-2">
+                                                <Label>
+                                                    Ação necessária
+                                                    <span className="ml-1 text-red-500">*</span>
+                                                </Label>
+
+                                                <Textarea
+                                                    className="min-h-[90px] resize-none"
+                                                    placeholder="Descreva exatamente o que precisa ser feito..."
+                                                    value={actionPlanForm.requiredAction}
+                                                    onChange={(e) =>
+                                                        setActionPlanForm((prev) => ({
+                                                            ...prev,
+                                                            requiredAction: e.target.value,
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div className="grid gap-4 md:grid-cols-2">
                                                 <div className="space-y-2">
                                                     <Label>
                                                         PN da RM
@@ -4495,24 +5126,6 @@ export default function RiskDetailPage() {
 
                                                 <div className="space-y-2">
                                                     <Label>
-                                                        Prazo
-                                                        <span className="ml-1 text-red-500">*</span>
-                                                    </Label>
-
-                                                    <Input
-                                                        type="date"
-                                                        value={actionPlanForm.dueDate}
-                                                        onChange={(e) =>
-                                                            setActionPlanForm((prev) => ({
-                                                                ...prev,
-                                                                dueDate: e.target.value,
-                                                            }))
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <Label>
                                                         Responsável
                                                         <span className="ml-1 text-red-500">*</span>
                                                     </Label>
@@ -4547,6 +5160,121 @@ export default function RiskDetailPage() {
                                                     </Select>
                                                 </div>
                                             </div>
+
+                                            <div className="grid gap-4 md:grid-cols-3">
+                                                <div className="space-y-2">
+                                                    <Label>
+                                                        Área responsável
+                                                        <span className="ml-1 text-red-500">*</span>
+                                                    </Label>
+
+                                                    <Input
+                                                        placeholder="Ex.: Logística, Qualidade, Compras..."
+                                                        value={actionPlanForm.responsibleArea}
+                                                        onChange={(e) =>
+                                                            setActionPlanForm((prev) => ({
+                                                                ...prev,
+                                                                responsibleArea: e.target.value,
+                                                            }))
+                                                        }
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label>
+                                                        Prazo
+                                                        <span className="ml-1 text-red-500">*</span>
+                                                    </Label>
+
+                                                    <Input
+                                                        type="date"
+                                                        value={actionPlanForm.dueDate}
+                                                        onChange={(e) =>
+                                                            setActionPlanForm((prev) => ({
+                                                                ...prev,
+                                                                dueDate: e.target.value,
+                                                            }))
+                                                        }
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label>Prioridade</Label>
+
+                                                    <Select
+                                                        value={actionPlanForm.priority}
+                                                        onValueChange={(value) =>
+                                                            setActionPlanForm((prev) => ({
+                                                                ...prev,
+                                                                priority: value as ActionPlanPriority,
+                                                            }))
+                                                        }
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+
+                                                        <SelectContent>
+                                                            <SelectItem value="LOW">
+                                                                Baixa
+                                                            </SelectItem>
+                                                            <SelectItem value="MEDIUM">
+                                                                Média
+                                                            </SelectItem>
+                                                            <SelectItem value="HIGH">
+                                                                Alta
+                                                            </SelectItem>
+                                                            <SelectItem value="CRITICAL">
+                                                                Crítica
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+
+                                            {selectedActionPlan && (
+                                                <div className="rounded-lg border p-4 space-y-4">
+                                                    <div>
+                                                        <p className="text-sm font-medium">
+                                                            Fechamento / evidência
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Use estes campos quando o responsável informar conclusão ou anexar evidência por link.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <Label>Evidência/anexo ou link</Label>
+
+                                                        <Input
+                                                            placeholder="https://..."
+                                                            value={actionPlanForm.evidenceUrl}
+                                                            onChange={(e) =>
+                                                                setActionPlanForm((prev) => ({
+                                                                    ...prev,
+                                                                    evidenceUrl: e.target.value,
+                                                                }))
+                                                            }
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <Label>Observação de fechamento</Label>
+
+                                                        <Textarea
+                                                            className="min-h-[80px] resize-none"
+                                                            placeholder="Informe o que foi executado, evidências ou observações finais..."
+                                                            value={actionPlanForm.closingNotes}
+                                                            onChange={(e) =>
+                                                                setActionPlanForm((prev) => ({
+                                                                    ...prev,
+                                                                    closingNotes: e.target.value,
+                                                                }))
+                                                            }
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <DialogFooter>

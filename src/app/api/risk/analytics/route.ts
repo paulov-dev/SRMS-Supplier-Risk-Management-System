@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import {
   Prisma,
+  RiskActionPlanStatus,
   RiskLevel,
   RiskOpeningReason,
   RiskWorkflowStatus,
@@ -9,37 +10,26 @@ import {
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 
-function getPermissions(user: any) {
-  return [
-    ...new Set(
-      user.roles.flatMap((ur: any) =>
-        ur.role.permissions.map(
-          (rp: any) => rp.permission.name
-        )
+function getPermissions(user: any): string[] {
+  const permissions =
+    user.roles?.flatMap((ur: any) =>
+      ur.role.permissions.map(
+        (rp: any) => String(rp.permission.name)
       )
-    ),
-  ]
+    ) || []
+
+  return Array.from(new Set<string>(permissions))
 }
 
 function buildRiskWhere(
   searchParams: URLSearchParams
 ): Prisma.RiskEventWhereInput {
   const search = searchParams.get("search") || ""
-
-  const workflowStatus =
-    searchParams.get("workflowStatus") || ""
-
-  const riskLevel =
-    searchParams.get("riskLevel") || ""
-
-  const supplierId =
-    searchParams.get("supplierId") || ""
-
-  const assignedToId =
-    searchParams.get("assignedToId") || ""
-
-  const openingReason =
-    searchParams.get("openingReason") || ""
+  const workflowStatus = searchParams.get("workflowStatus") || ""
+  const riskLevel = searchParams.get("riskLevel") || ""
+  const supplierId = searchParams.get("supplierId") || ""
+  const assignedToId = searchParams.get("assignedToId") || ""
+  const openingReason = searchParams.get("openingReason") || ""
 
   const where: Prisma.RiskEventWhereInput = {}
 
@@ -209,7 +199,6 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url)
-
     const where = buildRiskWhere(searchParams)
 
     const risks = await prisma.riskEvent.findMany({
@@ -249,7 +238,7 @@ export async function GET(req: Request) {
           select: {
             id: true,
             dueDate: true,
-            isCompleted: true,
+            status: true,
             assignedTo: {
               select: {
                 id: true,
@@ -826,16 +815,28 @@ export async function GET(req: Request) {
       }
 
       for (const plan of risk.actionPlans) {
-        const responsible =
+        const planResponsible =
           plan.assignedTo?.name || "Sem responsável"
 
-        const isOverdue =
-          !plan.isCompleted &&
-          plan.dueDate.getTime() < now.getTime()
+        const isCompleted =
+          plan.status === RiskActionPlanStatus.COMPLETED
 
-        if (plan.isCompleted) {
+        const isCanceled =
+          plan.status === RiskActionPlanStatus.CANCELED
+
+        const isPending =
+          !isCompleted && !isCanceled
+
+        const isOverdue =
+          isPending &&
+          Boolean(plan.dueDate) &&
+          plan.dueDate!.getTime() < now.getTime()
+
+        if (isCompleted) {
           completedActionPlans += 1
-        } else {
+        }
+
+        if (isPending) {
           pendingActionPlans += 1
         }
 
@@ -844,9 +845,9 @@ export async function GET(req: Request) {
 
           incrementMapValue(
             overdueActionPlansByResponsible,
-            responsible,
+            planResponsible,
             {
-              responsible,
+              responsible: planResponsible,
               total: 0,
             },
             (item) => {
@@ -857,9 +858,9 @@ export async function GET(req: Request) {
 
         incrementMapValue(
           actionPlansByResponsible,
-          responsible,
+          planResponsible,
           {
-            responsible,
+            responsible: planResponsible,
             total: 0,
             completed: 0,
             pending: 0,
@@ -868,9 +869,11 @@ export async function GET(req: Request) {
           (item) => {
             item.total += 1
 
-            if (plan.isCompleted) {
+            if (isCompleted) {
               item.completed += 1
-            } else {
+            }
+
+            if (isPending) {
               item.pending += 1
             }
 
@@ -1028,12 +1031,16 @@ export async function GET(req: Request) {
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error(error)
+    console.error("Erro ao carregar análises das RMs:", error)
 
     return NextResponse.json(
       {
         error:
           "Erro ao carregar análises das RMs",
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     )

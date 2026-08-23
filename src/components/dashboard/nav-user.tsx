@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { useAuth } from "@/contexts/AuthContext"
-import { useRouter } from "next/navigation"
 
 import {
   IconBellRinging,
@@ -65,6 +65,22 @@ type NotificationItem = {
   createdAt: string
 }
 
+function getNotificationHref(notification: NotificationItem) {
+  if (!notification.entity || !notification.entityId) {
+    return "/notifications"
+  }
+
+  if (notification.entity === "RiskEvent") {
+    return `/rms/${notification.entityId}`
+  }
+
+  if (notification.entity === "User") {
+    return `/users/${notification.entityId}`
+  }
+
+  return "/notifications"
+}
+
 export function NavUser({
   user,
 }: {
@@ -75,7 +91,6 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-
   const { logout } = useAuth()
   const router = useRouter()
 
@@ -139,9 +154,9 @@ export function NavUser({
         current.map((item) =>
           item.id === notification.id
             ? {
-              ...item,
-              isRead: true,
-            }
+                ...item,
+                isRead: true,
+              }
             : item
         )
       )
@@ -152,15 +167,7 @@ export function NavUser({
           : Math.max(current - 1, 0)
       )
 
-      if (
-        notification.entity === "RiskEvent" &&
-        notification.entityId
-      ) {
-        router.push(`/rms/${notification.entityId}`)
-        return
-      }
-
-      router.push("/notifications")
+      router.push(getNotificationHref(notification))
     } catch (error) {
       console.error(error)
     }
@@ -352,6 +359,16 @@ export function NavUser({
                       </DropdownMenuItem>
                     ))}
                   </div>
+                </>
+              )}
+
+              {notifications.length === 0 && !loadingNotifications && (
+                <>
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    Nenhuma notificação recente
+                  </DropdownMenuLabel>
                 </>
               )}
             </DropdownMenuGroup>

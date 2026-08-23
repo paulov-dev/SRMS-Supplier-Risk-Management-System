@@ -101,10 +101,32 @@ enum RiskPartHistoryType {
 enum RiskActionPlanHistoryType {
   ACTION_PLAN_CREATE
   ACTION_PLAN_UPDATE
+  ACTION_PLAN_START
+  ACTION_PLAN_SUBMIT_VALIDATION
+  ACTION_PLAN_VALIDATE
   ACTION_PLAN_COMPLETE
   ACTION_PLAN_REOPEN
+  ACTION_PLAN_CANCEL
   ACTION_PLAN_DELETE
+  RESPONSIBLE_CHANGE
+  DUE_DATE_CHANGE
+  STATUS_CHANGE
   NOTE
+}
+
+enum RiskActionPlanStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_VALIDATION
+  COMPLETED
+  CANCELED
+}
+
+enum RiskActionPlanPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 //////////////////////
@@ -145,8 +167,9 @@ model User {
   logisticsAssigned  LogisticsRequest[] @relation("LogisticsAssignedTo")
   logisticsReviewed  LogisticsRequest[] @relation("LogisticsReviewedBy")
 
-  createdActionPlans  RiskActionPlan[] @relation("ActionPlanCreatedBy")
-  assignedActionPlans RiskActionPlan[] @relation("ActionPlanAssignedTo")
+  createdActionPlans   RiskActionPlan[] @relation("ActionPlanCreatedBy")
+  assignedActionPlans  RiskActionPlan[] @relation("ActionPlanAssignedTo")
+  validatedActionPlans RiskActionPlan[] @relation("ActionPlanValidatedBy")
 
   buffersCreated LogisticsBuffer[] @relation("BufferCreator")
 
@@ -360,29 +383,44 @@ model RiskPartAssessment {
 }
 
 model RiskActionPlan {
-  id          String @id @default(uuid())
-  riskEventId String
+  id String @id @default(uuid())
 
+  riskEventId     String
   riskEventPartId String?
 
-  description String
-  dueDate     DateTime
+  title          String  @default("Plano de ação")
+  description    String?
+  requiredAction String?
 
-  isCompleted Boolean   @default(false)
-  completedAt DateTime?
+  assignedToId    String?
+  responsibleArea String?
 
-  createdById  String
-  assignedToId String
+  dueDate DateTime?
+
+  priority RiskActionPlanPriority @default(MEDIUM)
+  status   RiskActionPlanStatus   @default(OPEN)
+
+  submittedAt   DateTime?
+  validatedAt   DateTime?
+  validatedById String?
+
+  evidenceUrl  String?
+  closingNotes String?
+
+  createdById String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id], onDelete: Cascade)
 
-  riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id])
+  riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
 
-  createdBy  User @relation("ActionPlanCreatedBy", fields: [createdById], references: [id])
-  assignedTo User @relation("ActionPlanAssignedTo", fields: [assignedToId], references: [id])
+  createdBy User @relation("ActionPlanCreatedBy", fields: [createdById], references: [id])
+
+  assignedTo User? @relation("ActionPlanAssignedTo", fields: [assignedToId], references: [id])
+
+  validatedBy User? @relation("ActionPlanValidatedBy", fields: [validatedById], references: [id])
 
   history RiskActionPlanHistory[]
 
@@ -390,8 +428,10 @@ model RiskActionPlan {
   @@index([riskEventPartId])
   @@index([createdById])
   @@index([assignedToId])
+  @@index([validatedById])
   @@index([dueDate])
-  @@index([isCompleted])
+  @@index([priority])
+  @@index([status])
 }
 
 model RiskEventPartHistory {
@@ -448,14 +488,44 @@ model RiskActionPlanHistory {
 
   changeType RiskActionPlanHistoryType
 
+  oldTitle String?
+  newTitle String?
+
   oldDescription String?
   newDescription String?
+
+  oldRequiredAction String?
+  newRequiredAction String?
+
+  oldResponsibleArea String?
+  newResponsibleArea String?
 
   oldDueDate DateTime?
   newDueDate DateTime?
 
+  oldPriority RiskActionPlanPriority?
+  newPriority RiskActionPlanPriority?
+
+  oldStatus RiskActionPlanStatus?
+  newStatus RiskActionPlanStatus?
+
   oldAssignedToId String?
   newAssignedToId String?
+
+  oldValidatedById String?
+  newValidatedById String?
+
+  oldSubmittedAt DateTime?
+  newSubmittedAt DateTime?
+
+  oldValidatedAt DateTime?
+  newValidatedAt DateTime?
+
+  oldEvidenceUrl String?
+  newEvidenceUrl String?
+
+  oldClosingNotes String?
+  newClosingNotes String?
 
   oldCompleted Boolean?
   newCompleted Boolean?
@@ -476,6 +546,7 @@ model RiskActionPlanHistory {
   @@index([riskEventPartId])
   @@index([partNumberId])
   @@index([changedById])
+  @@index([changeType])
   @@index([changedAt])
 }
 
