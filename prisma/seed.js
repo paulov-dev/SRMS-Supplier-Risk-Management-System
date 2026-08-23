@@ -147,7 +147,8 @@ async function main() {
       'COMMENT_VIEW',
       'DASHBOARD_VIEW',
       'ANALYTICS_VIEW',
-      'USER_VIEW'
+      'USER_VIEW',
+      'USER_MANAGER'
     ]
   )
 

@@ -459,8 +459,16 @@ model User {
   email        String   @unique
   passwordHash String
   photoUrl     String?
-  isActive     Boolean  @default(true)
+  isActive     Boolean  @default(false)
   createdAt    DateTime @default(now())
+
+  // Auditoria da ativação
+  activatedAt   DateTime?
+  activatedById String?
+
+  activatedBy User?  @relation("UserActivatedBy", fields: [activatedById], references: [id], onDelete: SetNull)
+
+  activatedUsers User[] @relation("UserActivatedBy")
 
   roles    UserRole[]
   comments Comment[]
@@ -469,8 +477,8 @@ model User {
   assignedRisks RiskEvent[] @relation("AssignedTo")
   closedRisks   RiskEvent[] @relation("ClosedBy")
 
-  riskPartsAssigned       RiskEventPart[]         @relation("RiskPartAssignedTo")
-  riskPartHistory         RiskEventPartHistory[]  @relation("RiskPartHistoryChangedBy")
+  riskPartsAssigned       RiskEventPart[]        @relation("RiskPartAssignedTo")
+  riskPartHistory         RiskEventPartHistory[] @relation("RiskPartHistoryChangedBy")
   riskActionPlanHistories RiskActionPlanHistory[] @relation("RiskActionPlanHistoryChangedBy")
 
   logisticsRequested LogisticsRequest[] @relation("LogisticsRequestedBy")
@@ -482,12 +490,12 @@ model User {
   validatedActionPlans RiskActionPlan[] @relation("ActionPlanValidatedBy")
 
   createdWeeklySnapshotConfigs WeeklySnapshotConfig[] @relation("WeeklySnapshotConfigCreatedBy")
+
   updatedWeeklySnapshotConfigs WeeklySnapshotConfig[] @relation("WeeklySnapshotConfigUpdatedBy")
 
   weeklyRiskAnalystSnapshots WeeklyRiskAnalystSnapshot[]
   weeklyLogisticsSnapshots   WeeklyLogisticsSnapshot[]
-
-  weeklySnapshotEvents WeeklySnapshotEvent[]
+  weeklySnapshotEvents       WeeklySnapshotEvent[]
 
   buffersCreated LogisticsBuffer[] @relation("BufferCreator")
 

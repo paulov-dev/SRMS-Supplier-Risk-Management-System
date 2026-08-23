@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { login } from "@/services/auth/login"
 import { useAuth } from "@/contexts/AuthContext"
+import Link from "next/link"
 
 import { cn } from "@/lib/utils"
 
@@ -147,12 +148,12 @@ export function LoginForm({
 
                 <FieldDescription className="text-center">
                   Não tem uma conta?{" "}
-                  <a
-                    href="#"
+                  <Link
+                    href="/register"
                     className="underline underline-offset-4"
                   >
                     Solicite acesso
-                  </a>
+                  </Link>
                 </FieldDescription>
               </Field>
             </FieldGroup>
