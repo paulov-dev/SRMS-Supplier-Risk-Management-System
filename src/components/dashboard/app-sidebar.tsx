@@ -17,6 +17,7 @@ import {
   IconShieldLock,
   IconUsers,
   IconUserHexagon,
+  IconTruck,
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/contexts/AuthContext"
@@ -142,7 +143,7 @@ export function AppSidebar({
               "RISK_UPDATE",
               "USER_MANAGE",
             ],
-          },          
+          },
           {
             title: "Classes e Modelos",
             url: "/vehicles",
@@ -161,6 +162,15 @@ export function AppSidebar({
         url: "/suppliers",
         icon: IconFolder,
         permission: "SUPPLIER_VIEW",
+      },
+      {
+        title: "Logística",
+        url: "/logistics",
+        icon: IconTruck,
+        permission: [
+          "LOGISTICS_REQUEST_REVIEW",
+          "USER_MANAGE",
+        ],
       },
       {
         title: "Usuários",

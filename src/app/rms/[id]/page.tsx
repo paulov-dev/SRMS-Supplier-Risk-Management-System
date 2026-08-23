@@ -40,6 +40,7 @@ import {
     CardContent,
     CardHeader,
     CardTitle,
+    CardDescription,
 } from "@/components/ui/card"
 
 import { Button } from "@/components/ui/button"
@@ -143,6 +144,32 @@ type PartRiskStatus =
     | "GREY"
     | "BLUE"
 
+type LogisticsRequestType =
+    | "BOOK_INCLUSION"
+    | "BUFFER_CALCULATION"
+
+type LogisticsPriority =
+    | "LOW"
+    | "MEDIUM"
+    | "HIGH"
+    | "CRITICAL"
+
+type LogisticsRequestFormItem = {
+    riskEventPartId: string
+    selected: boolean
+    type: LogisticsRequestType
+    priority: LogisticsPriority
+    requestNotes: string
+    requestedQuantity: string
+    coverageStartDate: string
+    coverageEndDate: string
+    cutoffDate: string
+    cutoffReference: string
+    oldPartNumber: string
+    newPartNumber: string
+    replacementReason: string
+}
+
 type RiskPartAssessment = {
     id: string
 
@@ -202,8 +229,10 @@ const commodityOptions = [
 
 type LogisticsStatus =
     | "PENDING"
+    | "IN_REVIEW"
     | "APPROVED"
     | "REJECTED"
+    | "CANCELED"
 
 type RiskWorkflowStatus =
     | "OPEN"
@@ -317,20 +346,60 @@ type RiskDetail = {
 
     logistics: {
         id: string
+        code: string
+
+        type: LogisticsRequestType
         status: LogisticsStatus
+        priority: LogisticsPriority
+
         requestedAt: string
+        acceptedAt: string | null
         reviewedAt: string | null
-        notes: string | null
+        canceledAt: string | null
+
+        requestNotes: string | null
+        responseNotes: string | null
         rejectionReason: string | null
+
+        requestedQuantity: number | null
+        calculatedQuantity: number | null
+
+        coverageStartDate: string | null
+        coverageEndDate: string | null
+
+        cutoffDate: string | null
+        cutoffReference: string | null
+
+        oldPartNumber: string | null
+        newPartNumber: string | null
+        replacementReason: string | null
+
         requester: {
             id: string
             name: string
             email: string
-        }
+        } | null
+
+        assignedTo: {
+            id: string
+            name: string
+            email: string
+        } | null
+
         reviewer: {
             id: string
             name: string
             email: string
+        } | null
+
+        riskEventPart: {
+            id: string
+            partNumber: {
+                id: string
+                partNumber: string
+                description: string | null
+                vehicleProgram?: string | null
+            }
         } | null
     }[]
 
@@ -714,6 +783,13 @@ function getLogisticsStatusPill(status: LogisticsStatus) {
                 </Pill>
             )
 
+        case "IN_REVIEW":
+            return (
+                <Pill backgroundColor="#2563eb">
+                    Em análise
+                </Pill>
+            )
+
         case "APPROVED":
             return (
                 <Pill backgroundColor="#16a34a">
@@ -725,6 +801,13 @@ function getLogisticsStatusPill(status: LogisticsStatus) {
             return (
                 <Pill backgroundColor="#dc2626">
                     Recusada
+                </Pill>
+            )
+
+        case "CANCELED":
+            return (
+                <Pill backgroundColor="#6b7280">
+                    Cancelada
                 </Pill>
             )
 
@@ -1064,6 +1147,20 @@ export default function RiskDetailPage() {
             assignedToId: "none",
             riskEventPartId: "none",
         })
+
+    const [logisticsRequestOpen, setLogisticsRequestOpen] =
+        useState(false)
+
+    const [savingLogisticsRequest, setSavingLogisticsRequest] =
+        useState(false)
+
+    const [
+        logisticsRequestItems,
+        setLogisticsRequestItems,
+    ] = useState<LogisticsRequestFormItem[]>([])
+
+    const [logisticsRequestError, setLogisticsRequestError] =
+        useState("")
 
     const [users, setUsers] = useState<UserOption[]>([])
 
@@ -2070,6 +2167,160 @@ export default function RiskDetailPage() {
         return true
     })
 
+    function openLogisticsRequestDialog() {
+        if (!risk) return
+
+        const items = risk.parts.map((part) => ({
+            riskEventPartId: part.id,
+            selected: false,
+            type: "BOOK_INCLUSION" as LogisticsRequestType,
+            priority: "MEDIUM" as LogisticsPriority,
+            requestNotes: "",
+            requestedQuantity: "",
+            coverageStartDate: "",
+            coverageEndDate: "",
+            cutoffDate: "",
+            cutoffReference: "",
+            oldPartNumber: "",
+            newPartNumber: "",
+            replacementReason: "",
+        }))
+
+        setLogisticsRequestItems(items)
+        setLogisticsRequestError("")
+        setLogisticsRequestOpen(true)
+    }
+
+    function updateLogisticsRequestItem(
+        riskEventPartId: string,
+        field: keyof LogisticsRequestFormItem,
+        value: string | boolean
+    ) {
+        setLogisticsRequestItems((prev) =>
+            prev.map((item) =>
+                item.riskEventPartId === riskEventPartId
+                    ? {
+                        ...item,
+                        [field]: value,
+                    }
+                    : item
+            )
+        )
+    }
+
+    function getRiskPartById(riskEventPartId: string) {
+        return risk?.parts.find(
+            (part) => part.id === riskEventPartId
+        )
+    }
+
+    async function handleCreateLogisticsRequests() {
+        if (!risk) return
+
+        setLogisticsRequestError("")
+
+        const selectedItems = logisticsRequestItems.filter(
+            (item) => item.selected
+        )
+
+        if (selectedItems.length === 0) {
+            const message = "Selecione pelo menos um PN"
+            setLogisticsRequestError(message)
+            toast.error(message)
+            return
+        }
+
+        for (const item of selectedItems) {
+            const part = getRiskPartById(item.riskEventPartId)
+
+            if (!item.requestNotes.trim()) {
+                const message = `Informe a orientação logística para o PN ${part?.partNumber.partNumber || ""
+                    }`
+                setLogisticsRequestError(message)
+                toast.error(message)
+                return
+            }
+
+            if (
+                item.type === "BUFFER_CALCULATION" &&
+                (!item.coverageStartDate || !item.coverageEndDate)
+            ) {
+                const message = `Informe o período de cobertura para cálculo de buffer do PN ${part?.partNumber.partNumber || ""
+                    }`
+                setLogisticsRequestError(message)
+                toast.error(message)
+                return
+            }
+        }
+
+        try {
+            setSavingLogisticsRequest(true)
+
+            const payload = {
+                requests: selectedItems.map((item) => ({
+                    riskEventPartId: item.riskEventPartId,
+                    type: item.type,
+                    priority: item.priority,
+                    requestNotes: item.requestNotes.trim(),
+                    requestedQuantity: item.requestedQuantity
+                        ? Number(item.requestedQuantity)
+                        : null,
+                    coverageStartDate:
+                        item.coverageStartDate || null,
+                    coverageEndDate:
+                        item.coverageEndDate || null,
+                    cutoffDate: item.cutoffDate || null,
+                    cutoffReference:
+                        item.cutoffReference.trim() || null,
+                    oldPartNumber:
+                        item.oldPartNumber.trim() || null,
+                    newPartNumber:
+                        item.newPartNumber.trim() || null,
+                    replacementReason:
+                        item.replacementReason.trim() || null,
+                })),
+            }
+
+            const res = await fetch(
+                `/api/risk/${risk.id}/logistics`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    credentials: "include",
+                    body: JSON.stringify(payload),
+                }
+            )
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                throw new Error(
+                    data.error ||
+                    "Erro ao criar solicitação logística"
+                )
+            }
+
+            toast.success("Solicitação logística criada com sucesso")
+            setLogisticsRequestOpen(false)
+            setLogisticsRequestItems([])
+            await loadRisk()
+        } catch (error) {
+            console.error(error)
+
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : "Erro ao criar solicitação logística"
+
+            setLogisticsRequestError(message)
+            toast.error(message)
+        } finally {
+            setSavingLogisticsRequest(false)
+        }
+    }
+
     return (
         <ProtectedRoute permission="RISK_VIEW">
             <SidebarProvider>
@@ -2638,11 +2889,26 @@ export default function RiskDetailPage() {
 
                                     <div className="min-w-0 space-y-6">
                                         <Card>
-                                            <CardHeader>
-                                                <CardTitle className="flex items-center gap-2">
-                                                    <Truck className="h-5 w-5" />
-                                                    Logística
-                                                </CardTitle>
+                                            <CardHeader className="space-y-3">
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                    <div>
+                                                        <CardTitle>Logística</CardTitle>
+                                                        <CardDescription>
+                                                            Solicitações e acompanhamento logístico da RM.
+                                                        </CardDescription>
+                                                    </div>
+
+                                                    {risk.workflowStatus === "OPEN" && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={openLogisticsRequestDialog}
+                                                            disabled={!risk || risk.parts.length === 0}
+                                                        >
+                                                            Solicitar logística
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </CardHeader>
 
                                             <CardContent>
@@ -2652,48 +2918,77 @@ export default function RiskDetailPage() {
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-4">
-                                                        {risk.logistics.map((request) => (
-                                                            <div
-                                                                key={request.id}
-                                                                className="rounded-lg border p-4 space-y-3"
-                                                            >
-                                                                <div className="flex items-center justify-between">
-                                                                    <p className="font-medium">
-                                                                        Solicitação
-                                                                    </p>
+                                                        {risk.logistics.map((request) => {
+                                                            const requestedAt = new Date(request.requestedAt)
 
-                                                                    {getLogisticsStatusPill(
-                                                                        request.status
-                                                                    )}
+                                                            const pendingDays = Number.isNaN(
+                                                                requestedAt.getTime()
+                                                            )
+                                                                ? 0
+                                                                : Math.max(
+                                                                    0,
+                                                                    Math.floor(
+                                                                        (new Date().getTime() -
+                                                                            requestedAt.getTime()) /
+                                                                        (1000 * 60 * 60 * 24)
+                                                                    )
+                                                                )
+
+                                                            return (
+                                                                <div
+                                                                    key={request.id}
+                                                                    className="min-w-0 rounded-lg border p-4 text-sm"
+                                                                >
+                                                                    <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
+                                                                        <div className="min-w-0">
+                                                                            <p className="font-semibold">
+                                                                                {request.code}
+                                                                            </p>
+
+                                                                            <p className="text-xs text-muted-foreground">
+                                                                                {request.type ===
+                                                                                    "BUFFER_CALCULATION"
+                                                                                    ? "Cálculo de buffer"
+                                                                                    : "Inclusão no book da logística"}
+                                                                            </p>
+                                                                        </div>
+
+                                                                        <div className="shrink-0">
+                                                                            {getLogisticsStatusPill(
+                                                                                request.status
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        <p>
+                                                                            <span className="text-muted-foreground">
+                                                                                Solicitante:
+                                                                            </span>{" "}
+                                                                            {request.requester?.name || "-"}
+                                                                        </p>
+
+                                                                        {(request.status === "PENDING" ||
+                                                                            request.status ===
+                                                                            "IN_REVIEW") && (
+                                                                                <p>
+                                                                                    <span className="text-muted-foreground">
+                                                                                        Pendente há:
+                                                                                    </span>{" "}
+                                                                                    {pendingDays} dia(s)
+                                                                                </p>
+                                                                            )}
+
+                                                                        <p>
+                                                                            <span className="text-muted-foreground">
+                                                                                Revisor:
+                                                                            </span>{" "}
+                                                                            {request.reviewer?.name || "-"}
+                                                                        </p>
+                                                                    </div>
                                                                 </div>
-
-                                                                <div className="space-y-2 text-sm">
-                                                                    <p>
-                                                                        <span className="text-muted-foreground">
-                                                                            Solicitado por:
-                                                                        </span>{" "}
-                                                                        {request.requester.name}
-                                                                    </p>
-
-                                                                    <p>
-                                                                        <span className="text-muted-foreground">
-                                                                            Solicitado em:
-                                                                        </span>{" "}
-                                                                        {formatDate(
-                                                                            request.requestedAt
-                                                                        )}
-                                                                    </p>
-
-                                                                    <p>
-                                                                        <span className="text-muted-foreground">
-                                                                            Revisado por:
-                                                                        </span>{" "}
-                                                                        {request.reviewer?.name ||
-                                                                            "-"}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                                            )
+                                                        })}
                                                     </div>
                                                 )}
                                             </CardContent>
@@ -3067,6 +3362,366 @@ export default function RiskDetailPage() {
                                         </Card>
                                     </div>
                                 </div>
+
+                                <Dialog
+                                    open={logisticsRequestOpen}
+                                    onOpenChange={setLogisticsRequestOpen}
+                                >
+                                    <DialogContent className="max-h-[90vh] w-[95vw] overflow-y-auto sm:max-w-[95vw] lg:max-w-5xl xl:max-w-6xl">
+                                        <DialogHeader>
+                                            <DialogTitle>Solicitar logística</DialogTitle>
+                                            <DialogDescription>
+                                                Selecione os PNs da RM e informe a orientação
+                                                logística individualmente.
+                                            </DialogDescription>
+                                        </DialogHeader>
+
+                                        <div className="space-y-4">
+                                            {logisticsRequestError && (
+                                                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                                                    {logisticsRequestError}
+                                                </div>
+                                            )}
+
+                                            {logisticsRequestItems.length === 0 ? (
+                                                <div className="rounded-md border p-4 text-sm text-muted-foreground">
+                                                    Esta RM não possui PNs vinculados.
+                                                </div>
+                                            ) : (
+                                                logisticsRequestItems.map((item) => {
+                                                    const part = getRiskPartById(
+                                                        item.riskEventPartId
+                                                    )
+
+                                                    if (!part) return null
+
+                                                    return (
+                                                        <div
+                                                            key={item.riskEventPartId}
+                                                            className="rounded-lg border p-4"
+                                                        >
+                                                            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                                <label className="flex items-start gap-3">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="mt-1"
+                                                                        checked={item.selected}
+                                                                        onChange={(e) =>
+                                                                            updateLogisticsRequestItem(
+                                                                                item.riskEventPartId,
+                                                                                "selected",
+                                                                                e.target.checked
+                                                                            )
+                                                                        }
+                                                                    />
+
+                                                                    <div>
+                                                                        <p className="font-medium">
+                                                                            {
+                                                                                part.partNumber
+                                                                                    .partNumber
+                                                                            }
+                                                                        </p>
+                                                                        <p className="text-sm text-muted-foreground">
+                                                                            {part.partNumber
+                                                                                .description ||
+                                                                                "Sem descrição"}
+                                                                        </p>
+                                                                    </div>
+                                                                </label>
+
+                                                                <div>
+                                                                    {getPartStatusPill(part.status)}
+                                                                </div>
+                                                            </div>
+
+                                                            {item.selected && (
+                                                                <div className="space-y-4">
+                                                                    <div className="grid gap-4 md:grid-cols-3">
+                                                                        <div className="space-y-2">
+                                                                            <Label>Tipo</Label>
+                                                                            <Select
+                                                                                value={item.type}
+                                                                                onValueChange={(
+                                                                                    value
+                                                                                ) =>
+                                                                                    updateLogisticsRequestItem(
+                                                                                        item.riskEventPartId,
+                                                                                        "type",
+                                                                                        value as LogisticsRequestType
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <SelectTrigger>
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="BOOK_INCLUSION">
+                                                                                        Inclusão no
+                                                                                        book da
+                                                                                        logística
+                                                                                    </SelectItem>
+                                                                                    <SelectItem value="BUFFER_CALCULATION">
+                                                                                        Cálculo de
+                                                                                        buffer
+                                                                                    </SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <Label>Prioridade</Label>
+                                                                            <Select
+                                                                                value={
+                                                                                    item.priority
+                                                                                }
+                                                                                onValueChange={(
+                                                                                    value
+                                                                                ) =>
+                                                                                    updateLogisticsRequestItem(
+                                                                                        item.riskEventPartId,
+                                                                                        "priority",
+                                                                                        value as LogisticsPriority
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <SelectTrigger>
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="LOW">
+                                                                                        Baixa
+                                                                                    </SelectItem>
+                                                                                    <SelectItem value="MEDIUM">
+                                                                                        Média
+                                                                                    </SelectItem>
+                                                                                    <SelectItem value="HIGH">
+                                                                                        Alta
+                                                                                    </SelectItem>
+                                                                                    <SelectItem value="CRITICAL">
+                                                                                        Crítica
+                                                                                    </SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <Label>
+                                                                                Quantidade solicitada
+                                                                            </Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                value={
+                                                                                    item.requestedQuantity
+                                                                                }
+                                                                                onChange={(e) =>
+                                                                                    updateLogisticsRequestItem(
+                                                                                        item.riskEventPartId,
+                                                                                        "requestedQuantity",
+                                                                                        e.target.value
+                                                                                    )
+                                                                                }
+                                                                                placeholder="Ex.: 100"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        <Label>
+                                                                            Orientação para a
+                                                                            Logística
+                                                                        </Label>
+                                                                        <Textarea
+                                                                            value={
+                                                                                item.requestNotes
+                                                                            }
+                                                                            onChange={(e) =>
+                                                                                updateLogisticsRequestItem(
+                                                                                    item.riskEventPartId,
+                                                                                    "requestNotes",
+                                                                                    e.target.value
+                                                                                )
+                                                                            }
+                                                                            placeholder="Ex.: puxar o PN para acompanhamento de buffer a partir do ponto de corte ABC..."
+                                                                            rows={3}
+                                                                        />
+                                                                    </div>
+
+                                                                    <div className="grid gap-4 md:grid-cols-3">
+                                                                        <div className="space-y-2">
+                                                                            <Label>
+                                                                                Cobertura início
+                                                                            </Label>
+                                                                            <Input
+                                                                                type="date"
+                                                                                value={
+                                                                                    item.coverageStartDate
+                                                                                }
+                                                                                onChange={(e) =>
+                                                                                    updateLogisticsRequestItem(
+                                                                                        item.riskEventPartId,
+                                                                                        "coverageStartDate",
+                                                                                        e.target.value
+                                                                                    )
+                                                                                }
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <Label>
+                                                                                Cobertura fim
+                                                                            </Label>
+                                                                            <Input
+                                                                                type="date"
+                                                                                value={
+                                                                                    item.coverageEndDate
+                                                                                }
+                                                                                onChange={(e) =>
+                                                                                    updateLogisticsRequestItem(
+                                                                                        item.riskEventPartId,
+                                                                                        "coverageEndDate",
+                                                                                        e.target.value
+                                                                                    )
+                                                                                }
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <Label>
+                                                                                Data ponto de corte
+                                                                            </Label>
+                                                                            <Input
+                                                                                type="date"
+                                                                                value={
+                                                                                    item.cutoffDate
+                                                                                }
+                                                                                onChange={(e) =>
+                                                                                    updateLogisticsRequestItem(
+                                                                                        item.riskEventPartId,
+                                                                                        "cutoffDate",
+                                                                                        e.target.value
+                                                                                    )
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        <Label>
+                                                                            Ponto de corte /
+                                                                            rastreabilidade
+                                                                        </Label>
+                                                                        <Input
+                                                                            value={
+                                                                                item.cutoffReference
+                                                                            }
+                                                                            onChange={(e) =>
+                                                                                updateLogisticsRequestItem(
+                                                                                    item.riskEventPartId,
+                                                                                    "cutoffReference",
+                                                                                    e.target.value
+                                                                                )
+                                                                            }
+                                                                            placeholder="Ex.: NF 123456, lote ABC, data de corte, saldo SAP..."
+                                                                        />
+                                                                    </div>
+
+                                                                    <div className="rounded-md border bg-muted/30 p-3">
+                                                                        <p className="mb-3 text-sm font-medium">
+                                                                            Troca de PN, se
+                                                                            aplicável
+                                                                        </p>
+
+                                                                        <div className="grid gap-4 md:grid-cols-3">
+                                                                            <div className="space-y-2">
+                                                                                <Label>
+                                                                                    PN antigo
+                                                                                </Label>
+                                                                                <Input
+                                                                                    value={
+                                                                                        item.oldPartNumber
+                                                                                    }
+                                                                                    onChange={(e) =>
+                                                                                        updateLogisticsRequestItem(
+                                                                                            item.riskEventPartId,
+                                                                                            "oldPartNumber",
+                                                                                            e.target.value
+                                                                                        )
+                                                                                    }
+                                                                                    placeholder="PN antigo"
+                                                                                />
+                                                                            </div>
+
+                                                                            <div className="space-y-2">
+                                                                                <Label>
+                                                                                    PN novo
+                                                                                </Label>
+                                                                                <Input
+                                                                                    value={
+                                                                                        item.newPartNumber
+                                                                                    }
+                                                                                    onChange={(e) =>
+                                                                                        updateLogisticsRequestItem(
+                                                                                            item.riskEventPartId,
+                                                                                            "newPartNumber",
+                                                                                            e.target.value
+                                                                                        )
+                                                                                    }
+                                                                                    placeholder="PN novo"
+                                                                                />
+                                                                            </div>
+
+                                                                            <div className="space-y-2">
+                                                                                <Label>
+                                                                                    Motivo da troca
+                                                                                </Label>
+                                                                                <Input
+                                                                                    value={
+                                                                                        item.replacementReason
+                                                                                    }
+                                                                                    onChange={(e) =>
+                                                                                        updateLogisticsRequestItem(
+                                                                                            item.riskEventPartId,
+                                                                                            "replacementReason",
+                                                                                            e.target.value
+                                                                                        )
+                                                                                    }
+                                                                                    placeholder="Ex.: alteração técnica"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })
+                                            )}
+                                        </div>
+
+                                        <DialogFooter>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setLogisticsRequestOpen(false)}
+                                                disabled={savingLogisticsRequest}
+                                            >
+                                                Cancelar
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                onClick={handleCreateLogisticsRequests}
+                                                disabled={savingLogisticsRequest}
+                                            >
+                                                {savingLogisticsRequest
+                                                    ? "Enviando..."
+                                                    : "Enviar para Logística"}
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
 
                                 <Dialog
                                     open={editRiskOpen}

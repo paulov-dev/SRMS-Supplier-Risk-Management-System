@@ -55,16 +55,31 @@ enum PartRiskStatus {
   BLUE
 }
 
-enum LogisticsStatus {
+enum LogisticsRequestType {
+  BOOK_INCLUSION
+  BUFFER_CALCULATION
+}
+
+enum LogisticsRequestStatus {
   PENDING
+  IN_REVIEW
   APPROVED
   REJECTED
+  CANCELED
+}
+
+enum LogisticsPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 enum RiskPartLogisticsStatus {
   NOT_REQUESTED
-  PENDING
+  REQUESTED
   IN_LOGISTICS
+  APPROVED
   REJECTED
 }
 
@@ -122,12 +137,13 @@ model User {
   assignedRisks RiskEvent[] @relation("AssignedTo")
   closedRisks   RiskEvent[] @relation("ClosedBy")
 
-  requestedLogistics LogisticsRequest[] @relation("LogisticsRequester")
-  reviewedLogistics  LogisticsRequest[] @relation("LogisticsReviewer")
-
   riskPartsAssigned       RiskEventPart[]         @relation("RiskPartAssignedTo")
   riskPartHistory         RiskEventPartHistory[]  @relation("RiskPartHistoryChangedBy")
   riskActionPlanHistories RiskActionPlanHistory[] @relation("RiskActionPlanHistoryChangedBy")
+
+  logisticsRequested LogisticsRequest[] @relation("LogisticsRequestedBy")
+  logisticsAssigned  LogisticsRequest[] @relation("LogisticsAssignedTo")
+  logisticsReviewed  LogisticsRequest[] @relation("LogisticsReviewedBy")
 
   createdActionPlans  RiskActionPlan[] @relation("ActionPlanCreatedBy")
   assignedActionPlans RiskActionPlan[] @relation("ActionPlanAssignedTo")
@@ -302,6 +318,7 @@ model RiskEventPart {
 
   assignedTo User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
 
+  logisticsRequests   LogisticsRequest[]
   history             RiskEventPartHistory[]
   actionPlans         RiskActionPlan[]
   actionPlanHistory   RiskActionPlanHistory[]
@@ -489,32 +506,66 @@ model PartNumber {
 //////////////////////
 
 model LogisticsRequest {
-  id          String @id @default(uuid())
-  riskEventId String
+  id   String @id @default(uuid())
+  code String @unique
 
-  requestedBy String
-  assignedTo  String?
+  riskEventId     String
+  riskEventPartId String
 
-  status LogisticsStatus @default(PENDING)
+  type     LogisticsRequestType
+  status   LogisticsRequestStatus @default(PENDING)
+  priority LogisticsPriority      @default(MEDIUM)
+
+  requestedById String
+  assignedToId  String?
+  reviewedById  String?
 
   requestedAt DateTime  @default(now())
+  acceptedAt  DateTime?
   reviewedAt  DateTime?
+  canceledAt  DateTime?
 
-  notes           String?
+  requestNotes    String?
+  responseNotes   String?
   rejectionReason String?
 
-  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id])
+  requestedQuantity  Int?
+  calculatedQuantity Int?
 
-  requester User  @relation("LogisticsRequester", fields: [requestedBy], references: [id])
-  reviewer  User? @relation("LogisticsReviewer", fields: [assignedTo], references: [id])
+  coverageStartDate DateTime?
+  coverageEndDate   DateTime?
 
-  buffers LogisticsBuffer[]
+  cutoffDate      DateTime?
+  cutoffReference String?
+
+  oldPartNumber     String?
+  newPartNumber     String?
+  replacementReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id], onDelete: Cascade)
+
+  riskEventPart RiskEventPart @relation(fields: [riskEventPartId], references: [id], onDelete: Cascade)
+
+  requestedBy User @relation("LogisticsRequestedBy", fields: [requestedById], references: [id])
+
+  assignedTo User? @relation("LogisticsAssignedTo", fields: [assignedToId], references: [id])
+
+  reviewedBy       User?             @relation("LogisticsReviewedBy", fields: [reviewedById], references: [id])
+  logisticsBuffers LogisticsBuffer[]
 
   @@index([riskEventId])
-  @@index([requestedBy])
-  @@index([assignedTo])
+  @@index([riskEventPartId])
+  @@index([type])
   @@index([status])
+  @@index([priority])
+  @@index([requestedById])
+  @@index([assignedToId])
+  @@index([reviewedById])
   @@index([requestedAt])
+  @@index([reviewedAt])
 }
 
 model LogisticsBuffer {
@@ -527,6 +578,7 @@ model LogisticsBuffer {
   notes              String?
   createdBy          String
   createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   logisticsRequest LogisticsRequest @relation(fields: [logisticsRequestId], references: [id])
   partNumber       PartNumber       @relation(fields: [partNumberId], references: [id])

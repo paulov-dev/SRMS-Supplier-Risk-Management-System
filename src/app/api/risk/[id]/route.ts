@@ -191,26 +191,37 @@ const riskInclude = {
 
   logistics: {
     include: {
-      requester: {
+      requestedBy: {
         select: {
           id: true,
           name: true,
           email: true,
         },
       },
-      reviewer: {
+      assignedTo: {
         select: {
           id: true,
           name: true,
           email: true,
         },
       },
-      buffers: {
+      reviewedBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      riskEventPart: {
         include: {
-          partNumber: true,
-        },
-        orderBy: {
-          createdAt: "desc",
+          partNumber: {
+            select: {
+              id: true,
+              partNumber: true,
+              description: true,
+              vehicleProgram: true,
+            },
+          },
         },
       },
     },
@@ -430,38 +441,42 @@ function formatRiskResponse(risk: any) {
 
     logistics: risk.logistics.map((request: any) => ({
       id: request.id,
-
+      type: request.type,
       status: request.status,
+      priority: request.priority,
 
       requestedAt: request.requestedAt,
+      acceptedAt: request.acceptedAt,
       reviewedAt: request.reviewedAt,
+      canceledAt: request.canceledAt,
 
-      notes: request.notes,
+      requestNotes: request.requestNotes,
+      responseNotes: request.responseNotes,
       rejectionReason: request.rejectionReason,
 
-      requester: request.requester,
-      reviewer: request.reviewer,
+      requestedQuantity: request.requestedQuantity,
+      calculatedQuantity: request.calculatedQuantity,
 
-      buffers: request.buffers.map((buffer: any) => ({
-        id: buffer.id,
+      coverageStartDate: request.coverageStartDate,
+      coverageEndDate: request.coverageEndDate,
 
-        bufferQuantity: buffer.bufferQuantity,
-        coverageDays: buffer.coverageDays,
-        validUntil: buffer.validUntil,
+      cutoffDate: request.cutoffDate,
+      cutoffReference: request.cutoffReference,
 
-        notes: buffer.notes,
-        createdAt: buffer.createdAt,
+      oldPartNumber: request.oldPartNumber,
+      newPartNumber: request.newPartNumber,
+      replacementReason: request.replacementReason,
 
-        partNumber: {
-          id: buffer.partNumber.id,
-          partNumber:
-            buffer.partNumber.partNumber,
-          description:
-            buffer.partNumber.description,
-          vehicleProgram:
-            buffer.partNumber.vehicleProgram,
-        },
-      })),
+      requester: request.requestedBy,
+      assignedTo: request.assignedTo,
+      reviewer: request.reviewedBy,
+
+      riskEventPart: request.riskEventPart
+        ? {
+          id: request.riskEventPart.id,
+          partNumber: request.riskEventPart.partNumber,
+        }
+        : null,
     })),
 
     comments: risk.comments.map((comment: any) => ({
