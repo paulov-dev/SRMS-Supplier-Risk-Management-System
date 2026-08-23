@@ -2106,7 +2106,7 @@ export default function RiskDetailPage() {
                                         </Button>
 
                                         <div>
-                                            <div className="flex flex-wrap items-center gap-2">
+                                            <div className="flex min-w-0 flex-wrap items-center gap-2">
                                                 <h1 className="text-2xl font-semibold">
                                                     {risk.code}
                                                 </h1>
@@ -2125,7 +2125,7 @@ export default function RiskDetailPage() {
                                     </div>
 
                                     {canEditRisk() && (
-                                        <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-2">
                                             <Button
                                                 type="button"
                                                 variant="outline"
@@ -2237,8 +2237,8 @@ export default function RiskDetailPage() {
                                     </Card>
                                 </div>
 
-                                <div className="grid gap-6 xl:grid-cols-3">
-                                    <div className="space-y-6 xl:col-span-2">
+                                <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_400px]">
+                                    <div className="min-w-0 space-y-6">
                                         <Card>
                                             <CardHeader>
                                                 <CardTitle className="flex items-center gap-2">
@@ -2369,7 +2369,7 @@ export default function RiskDetailPage() {
                                                     </div>
                                                 ) : (
                                                     <div className="overflow-x-auto rounded-lg border">
-                                                        <table className="w-full text-sm">
+                                                        <table className="w-full min-w-[760px] text-sm">
                                                             <thead className="bg-muted/50">
                                                                 <tr className="border-b">
                                                                     <th className="px-4 py-3 text-left">
@@ -2431,8 +2431,9 @@ export default function RiskDetailPage() {
 
                                                                             {risk.workflowStatus === "OPEN" && (
                                                                                 <td className="px-4 py-3 text-right">
-                                                                                    <div className="flex justify-end gap-2">
+                                                                                    <div className="flex flex-wrap justify-end gap-2">
                                                                                         <Button
+                                                                                            className="w-full sm:w-auto"
                                                                                             type="button"
                                                                                             variant="outline"
                                                                                             size="sm"
@@ -2445,6 +2446,7 @@ export default function RiskDetailPage() {
                                                                                         </Button>
 
                                                                                         <Button
+                                                                                            className="w-full sm:w-auto"
                                                                                             type="button"
                                                                                             variant="outline"
                                                                                             size="sm"
@@ -2634,7 +2636,7 @@ export default function RiskDetailPage() {
                                         </Card>
                                     </div>
 
-                                    <div className="space-y-6">
+                                    <div className="min-w-0 space-y-6">
                                         <Card>
                                             <CardHeader>
                                                 <CardTitle className="flex items-center gap-2">
@@ -2705,7 +2707,7 @@ export default function RiskDetailPage() {
                                                         Histórico da RM
                                                     </CardTitle>
 
-                                                    <div className="grid gap-2 md:grid-cols-3">
+                                                    <div className="grid min-w-0 gap-2 sm:grid-cols-2 2xl:grid-cols-1">
                                                         <Select
                                                             value={historyTypeFilter}
                                                             onValueChange={(value) =>
@@ -2818,11 +2820,12 @@ export default function RiskDetailPage() {
                                                     {(historyTypeFilter !== "ALL" ||
                                                         historyPartFilter !== "ALL" ||
                                                         historySearch.trim()) && (
-                                                            <div className="flex justify-end">
+                                                            <div className="flex w-full justify-start sm:justify-end">
                                                                 <Button
                                                                     type="button"
                                                                     variant="outline"
                                                                     size="sm"
+                                                                    className="w-full sm:w-auto"
                                                                     onClick={() => {
                                                                         setHistoryTypeFilter("ALL")
                                                                         setHistoryPartFilter("ALL")
@@ -2850,10 +2853,10 @@ export default function RiskDetailPage() {
                                                                 return (
                                                                     <div
                                                                         key={item.id}
-                                                                        className="rounded-lg border p-3 text-sm"
+                                                                        className="min-w-0 rounded-lg border p-3 text-sm"
                                                                     >
                                                                         <div className="space-y-2">
-                                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                            <div className="flex min-w-0 flex-wrap items-center gap-2">
                                                                                 <Badge variant="outline">
                                                                                     Status da RM
                                                                                 </Badge>
@@ -2893,10 +2896,10 @@ export default function RiskDetailPage() {
                                                                 return (
                                                                     <div
                                                                         key={item.id}
-                                                                        className="rounded-lg border p-3 text-sm"
+                                                                        className="min-w-0 rounded-lg border p-3 text-sm"
                                                                     >
                                                                         <div className="space-y-2">
-                                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                            <div className="flex min-w-0 flex-wrap items-center gap-2">
                                                                                 <Badge variant="outline">
                                                                                     Plano de ação
                                                                                 </Badge>
@@ -2976,10 +2979,10 @@ export default function RiskDetailPage() {
                                                             return (
                                                                 <div
                                                                     key={item.id}
-                                                                    className="rounded-lg border p-3 text-sm"
+                                                                    className="min-w-0 rounded-lg border p-3 text-sm"
                                                                 >
                                                                     <div className="space-y-2">
-                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                        <div className="flex min-w-0 flex-wrap items-center gap-2">
                                                                             <Badge variant="outline">
                                                                                 PN
                                                                             </Badge>
@@ -3500,7 +3503,7 @@ export default function RiskDetailPage() {
 
                                                         <Input
                                                             value={editPartForm.description}
-                                                            disabled                                                          
+                                                            disabled
                                                         />
                                                     </div>
 

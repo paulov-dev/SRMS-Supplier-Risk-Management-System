@@ -419,33 +419,46 @@ export default function VehiclesPage() {
 
                 <SidebarInset>
                     <SiteHeader />
-
                     <div className="space-y-6 p-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                            <div>
-                                <h1 className="text-2xl font-semibold">
-                                    Classes e Modelos
-                                </h1>
 
-                                <p className="text-sm text-muted-foreground">
-                                    Cadastre classes veiculares e seus modelos
-                                    para rastrear aplicações de PNs.
-                                </p>
-                            </div>
+                        <Card className="overflow-hidden border-none bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white">
+                            <CardContent className="p-6">
+                                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                                    <div className="space-y-2">
 
-                            <Button
-                                variant="outline"
-                                onClick={loadFamilies}
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <RotateCcw className="mr-2 h-4 w-4" />
-                                )}
-                                Atualizar
-                            </Button>
-                        </div>
+
+                                        <div>
+                                            <h1 className="text-3xl font-bold tracking-tight">
+                                                Classes e Modelos
+                                            </h1>
+
+                                            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                                                Cadastre classes veiculares e seus modelos
+                                                para rastrear aplicações de PNs.
+                                            </p>
+                                        </div>
+
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            variant="secondary"
+                                            onClick={loadFamilies}
+                                            disabled={loading}
+                                        >
+                                            {loading ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                            )}
+                                            Atualizar
+                                        </Button>
+                                    </div>
+
+                                </div>
+                            </CardContent>
+                        </Card>
+
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <Card>

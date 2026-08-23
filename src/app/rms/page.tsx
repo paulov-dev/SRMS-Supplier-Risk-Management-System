@@ -526,55 +526,66 @@ export default function RisksPage() {
           <SiteHeader />
 
           <div className="p-6 space-y-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold">
-                  RMs
-                </h1>
+            
+            <Card className="overflow-hidden border-none bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white">
+              <CardContent className="p-6">
+                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-2">
 
-                <p className="text-sm text-muted-foreground">
-                  Book principal de RMs abertas, fechadas e em acompanhamento.
-                </p>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    loadRisks(pagination.page, filters)
-                  }
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                  )}
-                  Atualizar
-                </Button>
+                    <div>
+                      <h1 className="text-3xl font-bold tracking-tight">
+                        RMs
+                      </h1>
 
-                {canCreateRisk && (
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      router.push("/rms/create")
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nova RM
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.push("/rms/analytics")}
-                >
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  Análises
-                </Button>
-              </div>
-            </div>
+                      <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                        Gerencie RMs, acompanhe ocorrências abertas e encerradas, monitore casos em andamento e mantenha uma visão centralizada do gerenciamento de riscos.
+                      </p>
+                    </div>
+
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        loadRisks(pagination.page, filters)
+                      }
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                      )}
+                      Atualizar
+                    </Button>
+
+                    {canCreateRisk && (
+                      <Button
+                        onClick={() =>
+                          router.push("/rms/create")
+                        }
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Nova RM
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => router.push("/rms/analytics")}
+                    >
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      Análises
+                    </Button>
+                  </div>
+
+                </div>
+              </CardContent>
+            </Card>
+
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Card>

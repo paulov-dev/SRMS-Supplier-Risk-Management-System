@@ -630,34 +630,48 @@ export default function PartNumbersPage() {
                     <SiteHeader />
 
                     <div className="space-y-6 p-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                            <div>
-                                <h1 className="text-2xl font-semibold">
-                                    PNs
-                                </h1>
 
-                                <p className="text-sm text-muted-foreground">
-                                    Visão consolidada dos PNs cadastrados,
-                                    suas RMs vinculadas, responsáveis e planos
-                                    de ação.
-                                </p>
-                            </div>
 
-                            <Button
-                                variant="outline"
-                                onClick={() =>
-                                    loadParts(pagination.page, filters)
-                                }
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <RotateCcw className="mr-2 h-4 w-4" />
-                                )}
-                                Atualizar
-                            </Button>
-                        </div>
+
+                        <Card className="overflow-hidden border-none bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white">
+                            <CardContent className="p-6">
+                                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                                    <div className="space-y-2">
+
+
+                                        <div>
+                                            <h1 className="text-3xl font-bold tracking-tight">
+                                                PNs
+                                            </h1>
+
+                                            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                                                Visão consolidada dos PNs cadastrados,
+                                                suas RMs vinculadas, responsáveis e planos
+                                                de ação.
+                                            </p>
+                                        </div>
+
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() =>
+                                                loadParts(pagination.page, filters)
+                                            }
+                                            disabled={loading}
+                                        >
+                                            {loading ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                            )}
+                                            Atualizar
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
 
                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <Card>
