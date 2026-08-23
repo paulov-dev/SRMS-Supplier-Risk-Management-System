@@ -77,11 +77,14 @@ import {
     CheckCircle2,
     Clock,
     Loader2,
+    PackageCheck,
+    Radio,
     RefreshCcw,
     ShieldAlert,
     TrendingDown,
     TrendingUp,
     Truck,
+    Users,
 } from "lucide-react"
 
 type WeeklySnapshot = {
@@ -251,6 +254,42 @@ type WeeklyEvent = {
     createdAt: string
 }
 
+type CurrentRiskTeamAnalyst = {
+    user: {
+        id: string
+        name: string
+        email: string
+        photoUrl?: string | null
+    }
+
+    risks: {
+        open: number
+        red: number
+        yellow: number
+        green: number
+        orange: number
+        grey: number
+        blue: number
+    }
+
+    parts: {
+        total: number
+        red: number
+        yellow: number
+        green: number
+        orange: number
+        grey: number
+        blue: number
+        withoutDemand: number
+        completed: number
+    }
+}
+
+type TeamCurrentState = {
+    generatedAt: string
+    analysts: CurrentRiskTeamAnalyst[]
+}
+
 type WeeklySnapshotsResponse = {
     filters: {
         year: number
@@ -264,6 +303,7 @@ type WeeklySnapshotsResponse = {
     riskAnalystSnapshots: RiskAnalystSnapshot[]
     logisticsSnapshots: LogisticsSnapshot[]
     events: WeeklyEvent[]
+    teamCurrentState?: TeamCurrentState
 }
 
 const COLORS = {
@@ -1515,6 +1555,332 @@ function ExecutiveStatusCard({
     )
 }
 
+function CurrentStateMetric({
+    label,
+    value,
+    description,
+    icon,
+}: {
+    label: string
+    value: number
+    description: string
+    icon: React.ReactNode
+}) {
+    return (
+        <div className="rounded-xl border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-sm text-muted-foreground">
+                        {label}
+                    </p>
+
+                    <p className="mt-1 text-2xl font-bold">
+                        {formatNumber(value)}
+                    </p>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {description}
+                    </p>
+                </div>
+
+                <div className="rounded-lg bg-muted p-2">
+                    {icon}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function CurrentStateCountBadge({
+    value,
+    className,
+}: {
+    value: number
+    className: string
+}) {
+    if (value === 0) {
+        return (
+            <Badge
+                variant="outline"
+                className="min-w-9 justify-center text-muted-foreground"
+            >
+                0
+            </Badge>
+        )
+    }
+
+    return (
+        <Badge
+            className={`min-w-9 justify-center ${className}`}
+        >
+            {value}
+        </Badge>
+    )
+}
+
+function CurrentRiskTeamStateCard({
+    state,
+}: {
+    state?: TeamCurrentState
+}) {
+    const analysts = state?.analysts || []
+
+    const totals = analysts.reduce(
+        (accumulator, analyst) => {
+            accumulator.openRisks += analyst.risks.open
+            accumulator.redRisks += analyst.risks.red
+            accumulator.parts += analyst.parts.total
+            accumulator.completedParts += analyst.parts.completed
+
+            return accumulator
+        },
+        {
+            openRisks: 0,
+            redRisks: 0,
+            parts: 0,
+            completedParts: 0,
+        }
+    )
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <CardTitle>
+                                Disposição atual do time de Risk
+                            </CardTitle>
+
+                            <Badge className="gap-1 bg-emerald-600">
+                                <Radio className="h-3 w-3" />
+                                Ao vivo
+                            </Badge>
+                        </div>
+
+                        <CardDescription className="mt-1">
+                            Carga operacional atual dos analistas de Risk.
+                            Os PNs são agrupados pelo responsável da RM em que estão.
+                        </CardDescription>
+                    </div>
+
+                    {state?.generatedAt && (
+                        <p className="whitespace-nowrap text-xs text-muted-foreground">
+                            Atualizado em {formatDateTime(state.generatedAt)}
+                        </p>
+                    )}
+                </div>
+            </CardHeader>
+
+            <CardContent className="space-y-5">
+                {analysts.length === 0 ? (
+                    <EmptyState message="Nenhum usuário ativo com a role Risk_Analyst foi encontrado." />
+                ) : (
+                    <>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                            <CurrentStateMetric
+                                label="Analistas ativos"
+                                value={analysts.length}
+                                description="Role Risk_Analyst"
+                                icon={<Users className="h-5 w-5 text-blue-600" />}
+                            />
+
+                            <CurrentStateMetric
+                                label="RMs abertas"
+                                value={totals.openRisks}
+                                description="Atribuídas ao time"
+                                icon={<BarChart3 className="h-5 w-5 text-blue-600" />}
+                            />
+
+                            <CurrentStateMetric
+                                label="RMs Red"
+                                value={totals.redRisks}
+                                description="Prioridade imediata"
+                                icon={<ShieldAlert className="h-5 w-5 text-red-600" />}
+                            />
+
+                            <CurrentStateMetric
+                                label="PNs acompanhados"
+                                value={totals.parts}
+                                description="Vinculados a RMs abertas"                                
+                                icon={<PackageCheck className="h-5 w-5 text-violet-600" />}
+                            />
+
+                            <CurrentStateMetric
+                                label="PNs concluídos"
+                                value={totals.completedParts}
+                                description="Status Blue"
+                                icon={<CheckCircle2 className="h-5 w-5 text-blue-600" />}
+                            />
+                        </div>
+
+                        <Tabs
+                            defaultValue="current-risks"
+                            className="w-full"
+                        >
+                            <div className="overflow-x-auto pb-1">
+                                <TabsList className="w-max">
+                                    <TabsTrigger value="current-risks">
+                                        RMs por analista
+                                    </TabsTrigger>
+
+                                    <TabsTrigger value="current-parts">
+                                        PNs por analista
+                                    </TabsTrigger>
+                                </TabsList>
+                            </div>
+
+                            <TabsContent
+                                value="current-risks"
+                                className="mt-4"
+                            >
+                                <ResponsiveTableWrapper>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Analista</TableHead>
+                                                <TableHead className="text-center">Abertas</TableHead>
+                                                <TableHead className="text-center">Red</TableHead>
+                                                <TableHead className="text-center">Yellow</TableHead>
+                                                <TableHead className="text-center">Green</TableHead>
+                                                <TableHead className="text-center">Orange</TableHead>
+                                                <TableHead className="text-center">Grey</TableHead>
+                                                <TableHead className="text-center">Blue</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+
+                                        <TableBody>
+                                            {analysts.map((analyst) => (
+                                                <TableRow key={analyst.user.id}>
+                                                    <TableCell className="min-w-56">
+                                                        <Link
+                                                            href={`/users/${analyst.user.id}`}
+                                                            className="font-medium hover:underline"
+                                                        >
+                                                            {analyst.user.name}
+                                                        </Link>
+
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {analyst.user.email}
+                                                        </p>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center font-semibold">
+                                                        {analyst.risks.open}
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.risks.red} className="bg-red-600" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.risks.yellow} className="bg-yellow-500 text-black" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.risks.green} className="bg-green-600" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.risks.orange} className="bg-orange-500" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.risks.grey} className="bg-slate-500" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.risks.blue} className="bg-blue-600" />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </ResponsiveTableWrapper>
+                            </TabsContent>
+
+                            <TabsContent
+                                value="current-parts"
+                                className="mt-4"
+                            >
+                                <ResponsiveTableWrapper>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Analista</TableHead>
+                                                <TableHead className="text-center">Total</TableHead>
+                                                <TableHead className="text-center">Red</TableHead>
+                                                <TableHead className="text-center">Yellow</TableHead>
+                                                <TableHead className="text-center">Green</TableHead>
+                                                <TableHead className="text-center">Orange</TableHead>
+                                                <TableHead className="text-center">Grey</TableHead>
+                                                <TableHead className="text-center">Concluídos</TableHead>
+                                                <TableHead className="text-center">Sem demanda</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+
+                                        <TableBody>
+                                            {analysts.map((analyst) => (
+                                                <TableRow key={analyst.user.id}>
+                                                    <TableCell className="min-w-56">
+                                                        <Link
+                                                            href={`/users/${analyst.user.id}`}
+                                                            className="font-medium hover:underline"
+                                                        >
+                                                            {analyst.user.name}
+                                                        </Link>
+
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {analyst.user.email}
+                                                        </p>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center font-semibold">
+                                                        {analyst.parts.total}
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.parts.red} className="bg-red-600" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.parts.yellow} className="bg-yellow-500 text-black" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.parts.green} className="bg-green-600" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.parts.orange} className="bg-orange-500" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.parts.grey} className="bg-slate-500" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.parts.completed} className="bg-blue-600" />
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <CurrentStateCountBadge value={analyst.parts.withoutDemand} className="bg-zinc-700" />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </ResponsiveTableWrapper>
+
+                            </TabsContent>
+                        </Tabs>
+                    </>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
 function InsightItem({
     label,
     current,
@@ -1815,16 +2181,40 @@ function RankingCard({
         decimal?: boolean
     }[]
 }) {
+    const maxValue = Math.max(
+        ...items.map((item) => item.value),
+        1
+    )
+
+    function getPositionClass(index: number) {
+        switch (index) {
+            case 0:
+                return "bg-yellow-500 text-black"
+            case 1:
+                return "bg-slate-300 text-slate-900 dark:bg-slate-600 dark:text-white"
+            case 2:
+                return "bg-orange-500 text-white"
+            default:
+                return "bg-muted text-muted-foreground"
+        }
+    }
+
     return (
         <Card>
-            <CardHeader>
-                <CardTitle>
-                    {title}
-                </CardTitle>
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                    <CardTitle>
+                        {title}
+                    </CardTitle>
 
-                <CardDescription>
-                    {description}
-                </CardDescription>
+                    <CardDescription className="mt-1">
+                        {description}
+                    </CardDescription>
+                </div>
+
+                <Badge variant="secondary">
+                    Top 5
+                </Badge>
             </CardHeader>
 
             <CardContent>
@@ -1835,14 +2225,18 @@ function RankingCard({
                         {items.map((item, index) => (
                             <div
                                 key={item.id}
-                                className="flex items-center justify-between gap-4 rounded-lg border p-3"
+                                className="group flex items-center justify-between gap-4 rounded-lg border p-3 transition-colors hover:bg-muted/40"
                             >
                                 <div className="flex min-w-0 items-center gap-3">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+                                    <div
+                                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${getPositionClass(
+                                            index
+                                        )}`}
+                                    >
                                         {index + 1}
                                     </div>
 
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                         <p className="truncate font-medium">
                                             {item.name}
                                         </p>
@@ -1850,6 +2244,20 @@ function RankingCard({
                                         <p className="truncate text-xs text-muted-foreground">
                                             {item.detail}
                                         </p>
+
+                                        <div className="mt-2 h-1.5 w-full max-w-[240px] overflow-hidden rounded-full bg-muted">
+                                            <div
+                                                className="h-full rounded-full bg-primary transition-[width]"
+                                                style={{
+                                                    width: `${Math.max(
+                                                        4,
+                                                        (item.value /
+                                                            maxValue) *
+                                                            100
+                                                    )}%`,
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1905,10 +2313,8 @@ export default function WeeklyAnalyticsPage() {
                 params.set("month", selectedMonth)
             }
 
-            params.set("year", selectedYear)
-
-            if (selectedMonth !== "all") {
-                params.set("month", selectedMonth)
+            if (selectedWeek !== "all") {
+                params.set("week", selectedWeek)
             }
 
             const res = await fetch(
@@ -2189,235 +2595,295 @@ export default function WeeklyAnalyticsPage() {
                                     onPreviousChange={setComparisonPreviousWeek}
                                 />
 
-                                <ExecutiveStatusCard
-                                    current={latestSnapshot}
-                                    previous={previousSnapshot}
-                                />
-
-                                <WeeklyComparisonCard
-                                    current={latestSnapshot}
-                                    previous={previousSnapshot}
-                                />
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>
-                                            Comparativo visual entre semanas
-                                        </CardTitle>
-
-                                        <CardDescription>
-                                            Comparação direta entre a semana base e a semana escolhida.
-                                        </CardDescription>
-                                    </CardHeader>
-
-                                    <CardContent>
-                                        <WeeklyComparisonBarChart
-                                            current={latestSnapshot}
-                                            previous={previousSnapshot}
-                                        />
-                                    </CardContent>
-                                </Card>
-
-                                <RankingCards
-                                    riskAnalystSnapshots={data.riskAnalystSnapshots}
-                                    logisticsSnapshots={data.logisticsSnapshots}
-                                    current={latestSnapshot}
-                                />
-
-                                <WeeklyComparisonCard
-                                    current={latestSnapshot}
-                                    previous={previousSnapshot}
-                                />
-
-                                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>
-                                                Evolução semanal das RMs
-                                            </CardTitle>
-
-                                            <CardDescription>
-                                                Acompanhe RMs abertas, Red, Yellow e Green ao longo das semanas.
-                                            </CardDescription>
-                                        </CardHeader>
-
-                                        <CardContent>
-                                            <WeeklyEvolutionChart
-                                                snapshots={snapshots}
-                                            />
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>
-                                                Distribuição do último snapshot
-                                            </CardTitle>
-
-                                            <CardDescription>
-                                                Visão por farol da semana mais recente selecionada.
-                                            </CardDescription>
-                                        </CardHeader>
-
-                                        <CardContent>
-                                            <RiskDistributionChart
-                                                snapshot={latestSnapshot}
-                                            />
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>
-                                                RMs criadas vs fechadas
-                                            </CardTitle>
-
-                                            <CardDescription>
-                                                Comparativo semanal de entrada e saída de RMs.
-                                            </CardDescription>
-                                        </CardHeader>
-
-                                        <CardContent>
-                                            <CreatedClosedChart
-                                                snapshots={snapshots}
-                                            />
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>
-                                                RMs que melhoraram vs pioraram
-                                            </CardTitle>
-
-                                            <CardDescription>
-                                                Mudanças de farol detectadas nos snapshots.
-                                            </CardDescription>
-                                        </CardHeader>
-
-                                        <CardContent>
-                                            <ImprovedWorsenedChart
-                                                snapshots={snapshots}
-                                            />
-                                        </CardContent>
-                                    </Card>
-                                </div>
-
-                                <Tabs defaultValue="snapshots">
-                                    <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
-                                        <TabsList className="flex h-auto w-max min-w-full justify-start gap-1 sm:w-full sm:flex-wrap">
+                                <Tabs
+                                    defaultValue="executive"
+                                    className="w-full"
+                                >
+                                    <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:px-0">
+                                        <TabsList className="flex h-12 w-max min-w-full justify-start gap-1 sm:w-full sm:flex-wrap">
                                             <TabsTrigger
-                                                value="snapshots"
+                                                value="executive"
                                                 className="whitespace-nowrap"
                                             >
-                                                Snapshots
+                                                Visão executiva
                                             </TabsTrigger>
 
                                             <TabsTrigger
-                                                value="risk"
+                                                value="evolution"
                                                 className="whitespace-nowrap"
                                             >
-                                                Analistas de Risk
+                                                Evolução
                                             </TabsTrigger>
 
                                             <TabsTrigger
-                                                value="logistics"
+                                                value="rankings"
                                                 className="whitespace-nowrap"
                                             >
-                                                Logística
+                                                Rankings
                                             </TabsTrigger>
 
                                             <TabsTrigger
-                                                value="events"
+                                                value="details"
                                                 className="whitespace-nowrap"
                                             >
-                                                Eventos da semana
+                                                Dados detalhados
                                             </TabsTrigger>
                                         </TabsList>
                                     </div>
 
-                                    <TabsContent value="snapshots" className="mt-4">
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle>
-                                                    Snapshots semanais
-                                                </CardTitle>
+                                    <TabsContent
+                                        value="executive"
+                                        className="mt-4 space-y-4"
+                                    >
+                                        <ExecutiveStatusCard
+                                            current={latestSnapshot}
+                                            previous={previousSnapshot}
+                                        />
 
-                                                <CardDescription>
-                                                    Visão agregada das RMs, PNs, planos de ação e logística por semana.
-                                                </CardDescription>
-                                            </CardHeader>
+                                        <CurrentRiskTeamStateCard
+                                            state={data.teamCurrentState}
+                                        />
 
-                                            <CardContent>
-                                                <SnapshotsTable
-                                                    snapshots={snapshots}
+                                        <div className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-12">
+                                            <div className="min-w-0 2xl:col-span-7">
+                                                <WeeklyComparisonCard
+                                                    current={latestSnapshot}
+                                                    previous={previousSnapshot}
                                                 />
-                                            </CardContent>
-                                        </Card>
+                                            </div>
+
+                                            <Card className="min-w-0 2xl:col-span-5">
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        Comparativo visual
+                                                    </CardTitle>
+
+                                                    <CardDescription>
+                                                        Comparação direta entre a semana base e a semana escolhida.
+                                                    </CardDescription>
+                                                </CardHeader>
+
+                                                <CardContent>
+                                                    <WeeklyComparisonBarChart
+                                                        current={latestSnapshot}
+                                                        previous={previousSnapshot}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        </div>
                                     </TabsContent>
 
-                                    <TabsContent value="risk" className="mt-4">
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle>
-                                                    Histórico por analista de Risk
-                                                </CardTitle>
+                                    <TabsContent
+                                        value="evolution"
+                                        className="mt-4"
+                                    >
+                                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        Evolução semanal das RMs
+                                                    </CardTitle>
 
-                                                <CardDescription>
-                                                    Carga de RMs, farol, movimentações e planos de ação por responsável.
-                                                </CardDescription>
-                                            </CardHeader>
+                                                    <CardDescription>
+                                                        Acompanhe RMs abertas, Red, Yellow e Green ao longo das semanas.
+                                                    </CardDescription>
+                                                </CardHeader>
 
-                                            <CardContent>
-                                                <RiskAnalystTable
-                                                    snapshots={
-                                                        data.riskAnalystSnapshots
-                                                    }
-                                                />
-                                            </CardContent>
-                                        </Card>
+                                                <CardContent>
+                                                    <WeeklyEvolutionChart
+                                                        snapshots={snapshots}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        Distribuição do último snapshot
+                                                    </CardTitle>
+
+                                                    <CardDescription>
+                                                        Visão por farol da semana mais recente selecionada.
+                                                    </CardDescription>
+                                                </CardHeader>
+
+                                                <CardContent>
+                                                    <RiskDistributionChart
+                                                        snapshot={latestSnapshot}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        RMs criadas vs fechadas
+                                                    </CardTitle>
+
+                                                    <CardDescription>
+                                                        Comparativo semanal de entrada e saída de RMs.
+                                                    </CardDescription>
+                                                </CardHeader>
+
+                                                <CardContent>
+                                                    <CreatedClosedChart
+                                                        snapshots={snapshots}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        RMs que melhoraram vs pioraram
+                                                    </CardTitle>
+
+                                                    <CardDescription>
+                                                        Mudanças de farol detectadas nos snapshots.
+                                                    </CardDescription>
+                                                </CardHeader>
+
+                                                <CardContent>
+                                                    <ImprovedWorsenedChart
+                                                        snapshots={snapshots}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        </div>
                                     </TabsContent>
 
-                                    <TabsContent value="logistics" className="mt-4">
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle>
-                                                    Histórico por logística
-                                                </CardTitle>
-
-                                                <CardDescription>
-                                                    Solicitações pendentes, em análise, aprovadas, rejeitadas e tempo médio.
-                                                </CardDescription>
-                                            </CardHeader>
-
-                                            <CardContent>
-                                                <LogisticsTable
-                                                    snapshots={
-                                                        data.logisticsSnapshots
-                                                    }
-                                                />
-                                            </CardContent>
-                                        </Card>
+                                    <TabsContent
+                                        value="rankings"
+                                        className="mt-4"
+                                    >
+                                        <RankingCards
+                                            riskAnalystSnapshots={data.riskAnalystSnapshots}
+                                            logisticsSnapshots={data.logisticsSnapshots}
+                                            current={latestSnapshot}
+                                        />
                                     </TabsContent>
 
-                                    <TabsContent value="events" className="mt-4">
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle>
-                                                    Eventos e movimentações
-                                                </CardTitle>
-
-                                                <CardDescription>
-                                                    Detalhes das RMs criadas, fechadas, atribuídas e mudanças de farol.
-                                                </CardDescription>
-                                            </CardHeader>
-
-                                            <CardContent>
-                                                <EventsTable
-                                                    events={data.events}
-                                                />
-                                            </CardContent>
-                                        </Card>
+                                    <TabsContent
+                                        value="details"
+                                        className="mt-4"
+                                    >
+                                    <Tabs defaultValue="snapshots">
+                                        <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:px-0">
+                                            <TabsList className="flex h-12 w-max min-w-full justify-start gap-1 sm:w-full sm:flex-wrap">
+                                                <TabsTrigger
+                                                    value="snapshots"
+                                                    className="whitespace-nowrap"
+                                                >
+                                                    Snapshots
+                                                </TabsTrigger>
+    
+                                                <TabsTrigger
+                                                    value="risk"
+                                                    className="whitespace-nowrap"
+                                                >
+                                                    Analistas de Risk
+                                                </TabsTrigger>
+    
+                                                <TabsTrigger
+                                                    value="logistics"
+                                                    className="whitespace-nowrap"
+                                                >
+                                                    Logística
+                                                </TabsTrigger>
+    
+                                                <TabsTrigger
+                                                    value="events"
+                                                    className="whitespace-nowrap"
+                                                >
+                                                    Eventos da semana
+                                                </TabsTrigger>
+                                            </TabsList>
+                                        </div>
+    
+                                        <TabsContent value="snapshots" className="mt-4">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        Snapshots semanais
+                                                    </CardTitle>
+    
+                                                    <CardDescription>
+                                                        Visão agregada das RMs, PNs, planos de ação e logística por semana.
+                                                    </CardDescription>
+                                                </CardHeader>
+    
+                                                <CardContent>
+                                                    <SnapshotsTable
+                                                        snapshots={snapshots}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+    
+                                        <TabsContent value="risk" className="mt-4">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        Histórico por analista de Risk
+                                                    </CardTitle>
+    
+                                                    <CardDescription>
+                                                        Carga de RMs, farol, movimentações e planos de ação por responsável.
+                                                    </CardDescription>
+                                                </CardHeader>
+    
+                                                <CardContent>
+                                                    <RiskAnalystTable
+                                                        snapshots={
+                                                            data.riskAnalystSnapshots
+                                                        }
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+    
+                                        <TabsContent value="logistics" className="mt-4">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        Histórico por logística
+                                                    </CardTitle>
+    
+                                                    <CardDescription>
+                                                        Solicitações pendentes, em análise, aprovadas, rejeitadas e tempo médio.
+                                                    </CardDescription>
+                                                </CardHeader>
+    
+                                                <CardContent>
+                                                    <LogisticsTable
+                                                        snapshots={
+                                                            data.logisticsSnapshots
+                                                        }
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+    
+                                        <TabsContent value="events" className="mt-4">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>
+                                                        Eventos e movimentações
+                                                    </CardTitle>
+    
+                                                    <CardDescription>
+                                                        Detalhes das RMs criadas, fechadas, atribuídas e mudanças de farol.
+                                                    </CardDescription>
+                                                </CardHeader>
+    
+                                                <CardContent>
+                                                    <EventsTable
+                                                        events={data.events}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+                                    </Tabs>
                                     </TabsContent>
                                 </Tabs>
                             </>

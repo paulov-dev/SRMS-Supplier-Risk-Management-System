@@ -1,17 +1,22 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { SiteHeader } from "@/components/dashboard/site-header"
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 
 import {
     SidebarInset,
     SidebarProvider,
 } from "@/components/ui/sidebar"
 
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+import {
+    Avatar,
+    AvatarFallback,
+    AvatarImage,
+} from "@/components/ui/avatar"
 
 import {
     Card,
@@ -43,14 +48,16 @@ import {
 } from "@/components/ui/table"
 
 import {
+    AlertTriangle,
+    CalendarClock,
     Eye,
+    KeyRound,
     Loader2,
     RefreshCw,
     Search,
     ShieldCheck,
     UserCheck,
     Users,
-    UserX,
 } from "lucide-react"
 
 type UserRole =
@@ -73,27 +80,36 @@ type UserRow = {
     name: string
     email: string
     photoUrl?: string | null
-    isActive?: boolean
+    isActive: boolean
     status: "active" | "inactive"
     roles: UserRole[]
-    permissions?: string[]
+    permissions: string[]
     createdAt: string
-    counters?: UserCounters
+    counters: UserCounters
 }
 
-type UsersSummary = {
-    total: number
-    active: number
-    inactive: number
-    admins: number
+type UserViewFilter =
+    | "all"
+    | "pending"
+    | "active"
+    | "inactive"
+    | "admins"
+    | "without_role"
+
+const EMPTY_COUNTERS: UserCounters = {
+    createdRisks: 0,
+    assignedRisks: 0,
+    requestedLogistics: 0,
+    assignedLogistics: 0,
+    reviewedLogistics: 0,
 }
 
 function getRoleName(role: UserRole) {
-    if (typeof role === "string") {
-        return role
-    }
+    return typeof role === "string" ? role : role.name
+}
 
-    return role.name
+function getRoleNames(user: UserRow) {
+    return user.roles.map(getRoleName)
 }
 
 function getUserInitials(name: string) {
@@ -111,12 +127,12 @@ function getUserInitials(name: string) {
     return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
-function formatDate(value: string) {
+function formatDate(value?: string | null) {
+    if (!value) return "-"
+
     const date = new Date(value)
 
-    if (Number.isNaN(date.getTime())) {
-        return "-"
-    }
+    if (Number.isNaN(date.getTime())) return "-"
 
     return new Intl.DateTimeFormat("pt-BR", {
         day: "2-digit",
@@ -125,163 +141,418 @@ function formatDate(value: string) {
     }).format(date)
 }
 
-function getStatusBadge(status: string) {
-    if (status === "active") {
-        return <Badge>Ativo</Badge>
-    }
+function normalize(value?: string | null) {
+    return (value || "")
+        .trim()
+        .toLocaleLowerCase("pt-BR")
+}
 
-    if (status === "inactive") {
-        return <Badge variant="destructive">Inativo</Badge>
-    }
+function isAdmin(user: UserRow) {
+    return getRoleNames(user).some((role) =>
+        ["ADMIN", "SUPER_ADMIN"].includes(role)
+    )
+}
 
-    return <Badge variant="secondary">{status}</Badge>
+/*
+ * O cadastro público cria o usuário inativo e sem cargo.
+ * Por isso, essa combinação identifica uma solicitação nova.
+ */
+function isPendingApproval(user: UserRow) {
+    return !user.isActive && user.roles.length === 0
+}
+
+function isRecentRegistration(value: string) {
+    const createdAt = new Date(value)
+
+    if (Number.isNaN(createdAt.getTime())) return false
+
+    const difference = Date.now() - createdAt.getTime()
+    const differenceInDays =
+        difference / (1000 * 60 * 60 * 24)
+
+    return differenceInDays <= 30
+}
+
+function getActivityTotal(user: UserRow) {
+    return (
+        user.counters.createdRisks +
+        user.counters.assignedRisks +
+        user.counters.requestedLogistics +
+        user.counters.assignedLogistics +
+        user.counters.reviewedLogistics
+    )
+}
+
+function getUserPriority(user: UserRow) {
+    if (isPendingApproval(user)) return 0
+    if (!user.isActive) return 1
+    if (user.roles.length === 0) return 2
+    return 3
 }
 
 function getRoleBadge(role: string) {
-    if (role === "ADMIN" || role === "SUPER_ADMIN") {
+    if (role === "SUPER_ADMIN") {
         return (
-            <Badge variant="default">
-                {role}
+            <Badge variant="destructive">
+                SUPER_ADMIN
             </Badge>
         )
+    }
+
+    if (role === "ADMIN") {
+        return <Badge>ADMIN</Badge>
     }
 
     if (role.includes("LOGISTICS")) {
+        return <Badge variant="outline">{role}</Badge>
+    }
+
+    return <Badge variant="secondary">{role}</Badge>
+}
+
+function getAccessBadge(user: UserRow) {
+    if (isPendingApproval(user)) {
         return (
-            <Badge variant="outline">
-                {role}
+            <Badge className="bg-yellow-500 text-black">
+                Aguardando ativação
             </Badge>
         )
     }
 
+    if (!user.isActive) {
+        return <Badge variant="destructive">Inativo</Badge>
+    }
+
+    if (user.roles.length === 0) {
+        return (
+            <Badge className="bg-orange-500">
+                Ativo sem cargo
+            </Badge>
+        )
+    }
+
+    return <Badge className="bg-green-600">Ativo</Badge>
+}
+
+function MetricCard({
+    title,
+    value,
+    description,
+    icon,
+    attention = false,
+}: {
+    title: string
+    value: number
+    description: string
+    icon: React.ReactNode
+    attention?: boolean
+}) {
     return (
-        <Badge variant="secondary">
-            {role}
-        </Badge>
+        <Card
+            className={
+                attention
+                    ? "border-yellow-200 dark:border-yellow-900"
+                    : undefined
+            }
+        >
+            <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-sm text-muted-foreground">
+                            {title}
+                        </p>
+
+                        <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
+                            {value}
+                        </p>
+
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {description}
+                        </p>
+                    </div>
+
+                    <div
+                        className={
+                            attention
+                                ? "rounded-lg bg-yellow-50 p-2.5 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300"
+                                : "rounded-lg bg-muted p-2.5 text-muted-foreground"
+                        }
+                    >
+                        {icon}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+function GovernanceItem({
+    icon,
+    value,
+    description,
+}: {
+    icon: React.ReactNode
+    value: number
+    description: string
+}) {
+    return (
+        <div className="flex items-center gap-3 rounded-lg border p-3">
+            <div className="rounded-md bg-muted p-2 text-muted-foreground">
+                {icon}
+            </div>
+
+            <div>
+                <p className="font-medium tabular-nums">
+                    {value}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                    {description}
+                </p>
+            </div>
+        </div>
     )
 }
 
 export default function UsersPage() {
     const router = useRouter()
 
-    const [loading, setLoading] = useState(true)
     const [users, setUsers] = useState<UserRow[]>([])
-
-    const [summary, setSummary] =
-        useState<UsersSummary | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     const [search, setSearch] = useState("")
-    const [statusFilter, setStatusFilter] = useState("all")
+    const [viewFilter, setViewFilter] =
+        useState<UserViewFilter>("all")
     const [roleFilter, setRoleFilter] = useState("all")
 
-    useEffect(() => {
-        loadUsers()
-    }, [])
+    const loadUsers = useCallback(
+        async (showFullLoading = false) => {
+            try {
+                if (showFullLoading) {
+                    setLoading(true)
+                } else {
+                    setRefreshing(true)
+                }
 
-    async function loadUsers() {
-        try {
-            setLoading(true)
+                setError(null)
 
-            const res = await fetch("/api/users", {
-                credentials: "include",
-            })
+                const response = await fetch("/api/users", {
+                    credentials: "include",
+                    cache: "no-store",
+                })
 
-            const data = await res.json()
+                const data = await response.json()
 
-            if (!res.ok) {
-                throw new Error(
-                    data.details ||
-                        data.error ||
-                        "Erro ao carregar usuários"
+                if (!response.ok) {
+                    throw new Error(
+                        data.details ||
+                            data.error ||
+                            "Erro ao carregar usuários"
+                    )
+                }
+
+                const receivedUsers = data.data || data
+
+                const formattedUsers: UserRow[] = Array.isArray(
+                    receivedUsers
                 )
+                    ? receivedUsers.map((user: UserRow) => ({
+                          ...user,
+                          isActive:
+                              typeof user.isActive === "boolean"
+                                  ? user.isActive
+                                  : user.status === "active",
+                          status:
+                              user.status ||
+                              (user.isActive
+                                  ? "active"
+                                  : "inactive"),
+                          roles: user.roles || [],
+                          permissions: user.permissions || [],
+                          counters: {
+                              ...EMPTY_COUNTERS,
+                              ...(user.counters || {}),
+                          },
+                      }))
+                    : []
+
+                setUsers(formattedUsers)
+            } catch (loadError) {
+                console.error(loadError)
+
+                setError(
+                    loadError instanceof Error
+                        ? loadError.message
+                        : "Não foi possível carregar os usuários."
+                )
+            } finally {
+                setLoading(false)
+                setRefreshing(false)
             }
+        },
+        []
+    )
 
-            const nextUsers = data.data || data
-
-            setUsers(Array.isArray(nextUsers) ? nextUsers : [])
-            setSummary(data.summary || null)
-        } catch (error) {
-            console.error(error)
-            setUsers([])
-            setSummary(null)
-        } finally {
-            setLoading(false)
-        }
-    }
+    useEffect(() => {
+        void loadUsers(true)
+    }, [loadUsers])
 
     const roleOptions = useMemo(() => {
         const roles = users.flatMap((user) =>
-            user.roles.map((role) => getRoleName(role))
+            getRoleNames(user)
         )
 
-        return Array.from(new Set(roles)).sort()
+        return Array.from(new Set(roles)).sort((a, b) =>
+            a.localeCompare(b, "pt-BR")
+        )
+    }, [users])
+
+    const stats = useMemo(() => {
+        const total = users.length
+
+        const active = users.filter(
+            (user) => user.isActive
+        ).length
+
+        const inactive = users.filter(
+            (user) => !user.isActive
+        ).length
+
+        const pending = users.filter(
+            isPendingApproval
+        ).length
+
+        const admins = users.filter(isAdmin).length
+
+        const withoutRole = users.filter(
+            (user) => user.roles.length === 0
+        ).length
+
+        const activeWithoutRole = users.filter(
+            (user) => user.isActive && user.roles.length === 0
+        ).length
+
+        const userManagers = users.filter((user) =>
+            user.permissions.includes("USER_MANAGE")
+        ).length
+
+        const recentRegistrations = users.filter((user) =>
+            isRecentRegistration(user.createdAt)
+        ).length
+
+        return {
+            total,
+            active,
+            inactive,
+            pending,
+            admins,
+            withoutRole,
+            activeWithoutRole,
+            userManagers,
+            recentRegistrations,
+        }
+    }, [users])
+
+    const roleDistribution = useMemo(() => {
+        const distribution = new Map<string, number>()
+
+        for (const user of users) {
+            for (const role of getRoleNames(user)) {
+                distribution.set(
+                    role,
+                    (distribution.get(role) || 0) + 1
+                )
+            }
+        }
+
+        return Array.from(distribution.entries())
+            .map(([name, total]) => ({ name, total }))
+            .sort((roleA, roleB) => {
+                if (roleB.total !== roleA.total) {
+                    return roleB.total - roleA.total
+                }
+
+                return roleA.name.localeCompare(
+                    roleB.name,
+                    "pt-BR"
+                )
+            })
+            .slice(0, 6)
     }, [users])
 
     const filteredUsers = useMemo(() => {
-        return users.filter((user) => {
-            const normalizedSearch = search
-                .trim()
-                .toLowerCase()
+        const normalizedSearch = normalize(search)
 
-            const roleNames = user.roles.map((role) =>
-                getRoleName(role)
-            )
+        const filtered = users.filter((user) => {
+            const roleNames = getRoleNames(user)
 
             const matchesSearch =
                 !normalizedSearch ||
-                user.name
-                    .toLowerCase()
-                    .includes(normalizedSearch) ||
-                user.email
-                    .toLowerCase()
-                    .includes(normalizedSearch) ||
+                normalize(user.name).includes(normalizedSearch) ||
+                normalize(user.email).includes(normalizedSearch) ||
                 roleNames.some((role) =>
-                    role
-                        .toLowerCase()
-                        .includes(normalizedSearch)
+                    normalize(role).includes(normalizedSearch)
+                ) ||
+                user.permissions.some((permission) =>
+                    normalize(permission).includes(
+                        normalizedSearch
+                    )
                 )
 
-            const matchesStatus =
-                statusFilter === "all" ||
-                user.status === statusFilter
+            const matchesView = (() => {
+                switch (viewFilter) {
+                    case "pending":
+                        return isPendingApproval(user)
+                    case "active":
+                        return user.isActive
+                    case "inactive":
+                        return !user.isActive
+                    case "admins":
+                        return isAdmin(user)
+                    case "without_role":
+                        return user.roles.length === 0
+                    default:
+                        return true
+                }
+            })()
 
             const matchesRole =
                 roleFilter === "all" ||
                 roleNames.includes(roleFilter)
 
             return (
-                matchesSearch &&
-                matchesStatus &&
-                matchesRole
+                matchesSearch && matchesView && matchesRole
             )
         })
-    }, [users, search, statusFilter, roleFilter])
 
-    const computedSummary = useMemo(() => {
-        if (summary) return summary
+        return [...filtered].sort((userA, userB) => {
+            const priorityDifference =
+                getUserPriority(userA) -
+                getUserPriority(userB)
 
-        return {
-            total: users.length,
-            active: users.filter(
-                (user) => user.status === "active"
-            ).length,
-            inactive: users.filter(
-                (user) => user.status === "inactive"
-            ).length,
-            admins: users.filter((user) =>
-                user.roles.some((role) =>
-                    ["ADMIN", "SUPER_ADMIN"].includes(
-                        getRoleName(role)
-                    )
-                )
-            ).length,
-        }
-    }, [summary, users])
+            if (priorityDifference !== 0) {
+                return priorityDifference
+            }
+
+            return (
+                new Date(userB.createdAt).getTime() -
+                new Date(userA.createdAt).getTime()
+            )
+        })
+    }, [users, search, viewFilter, roleFilter])
 
     function clearFilters() {
         setSearch("")
-        setStatusFilter("all")
+        setViewFilter("all")
         setRoleFilter("all")
+    }
+
+    function getPercentage(value: number) {
+        if (stats.total === 0) return 0
+
+        return (value / stats.total) * 100
     }
 
     return (
@@ -292,27 +563,25 @@ export default function UsersPage() {
                 <SidebarInset>
                     <SiteHeader />
 
-                    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                    <main className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-6 p-4 md:p-6">
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                            <div className="space-y-1">
+                            <div>
                                 <h1 className="text-2xl font-semibold tracking-tight">
-                                    Usuários
+                                    Gestão de acessos
                                 </h1>
 
-                                <p className="text-sm text-muted-foreground">
-                                    Gerencie acessos, cargos e acompanhe
-                                    a atuação dos usuários no SRMS.
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Priorize novas solicitações, revise cargos e acompanhe a atuação dos usuários no SRMS.
                                 </p>
                             </div>
 
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={loadUsers}
-                                disabled={loading}
-                                className="w-full md:w-auto"
+                                onClick={() => void loadUsers(false)}
+                                disabled={refreshing}
                             >
-                                {loading ? (
+                                {refreshing ? (
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 ) : (
                                     <RefreshCw className="mr-2 h-4 w-4" />
@@ -321,416 +590,565 @@ export default function UsersPage() {
                             </Button>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardDescription>
-                                        Total de usuários
-                                    </CardDescription>
-                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <MetricCard
+                                title="Base total"
+                                value={stats.total}
+                                description="Usuários cadastrados"
+                                icon={<Users className="h-5 w-5" />}
+                            />
 
-                                <CardContent>
-                                    <div className="text-2xl font-bold">
-                                        {computedSummary.total}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Usuários cadastrados no sistema
-                                    </p>
-                                </CardContent>
-                            </Card>
+                            <MetricCard
+                                title="Acessos ativos"
+                                value={stats.active}
+                                description="Usuários liberados para entrar"
+                                icon={
+                                    <UserCheck className="h-5 w-5" />
+                                }
+                            />
 
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardDescription>
-                                        Ativos
-                                    </CardDescription>
-                                    <UserCheck className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
+                            <MetricCard
+                                title="Aguardando ativação"
+                                value={stats.pending}
+                                description="Contas inativas e ainda sem cargo"
+                                attention={stats.pending > 0}
+                                icon={
+                                    <CalendarClock className="h-5 w-5" />
+                                }
+                            />
 
-                                <CardContent>
-                                    <div className="text-2xl font-bold">
-                                        {computedSummary.active}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Usuários com acesso liberado
-                                    </p>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardDescription>
-                                        Inativos
-                                    </CardDescription>
-                                    <UserX className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-
-                                <CardContent>
-                                    <div className="text-2xl font-bold">
-                                        {computedSummary.inactive}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Usuários bloqueados/inativos
-                                    </p>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardDescription>
-                                        Administradores
-                                    </CardDescription>
-                                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-
-                                <CardContent>
-                                    <div className="text-2xl font-bold">
-                                        {computedSummary.admins}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Usuários com perfil administrativo
-                                    </p>
-                                </CardContent>
-                            </Card>
+                            <MetricCard
+                                title="Administradores"
+                                value={stats.admins}
+                                description="ADMIN e SUPER_ADMIN"
+                                icon={
+                                    <ShieldCheck className="h-5 w-5" />
+                                }
+                            />
                         </div>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>
-                                    Filtros
-                                </CardTitle>
+                        {error && (
+                            <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30">
+                                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <p className="text-sm text-red-700 dark:text-red-300">
+                                        {error}
+                                    </p>
 
-                                <CardDescription>
-                                    Pesquise por nome, email ou cargo e
-                                    filtre por status de acesso.
-                                </CardDescription>
-                            </CardHeader>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                            void loadUsers(true)
+                                        }
+                                    >
+                                        Tentar novamente
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
 
-                            <CardContent>
-                                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px_220px_auto] md:items-end">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">
-                                            Busca
-                                        </label>
+                        <div className="grid items-start gap-6 xl:grid-cols-12">
+                            <Card className="min-w-0 xl:col-span-9">
+                                <CardHeader className="gap-4 border-b md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                        <CardTitle>
+                                            Fila de gestão
+                                        </CardTitle>
 
-                                        <div className="relative">
-                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <CardDescription className="mt-1">
+                                            Solicitações novas e contas inativas aparecem primeiro.
+                                        </CardDescription>
+                                    </div>
 
-                                            <Input
-                                                value={search}
-                                                onChange={(e) =>
-                                                    setSearch(
-                                                        e.target.value
+                                    <Badge variant="secondary">
+                                        {filteredUsers.length} de{" "}
+                                        {users.length} usuário(s)
+                                    </Badge>
+                                </CardHeader>
+
+                                <CardContent className="p-0">
+                                    <div className="grid gap-3 border-b p-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_210px_210px_auto] xl:items-end">
+                                        <div className="space-y-2">
+                                            <label
+                                                htmlFor="user-search"
+                                                className="text-sm font-medium"
+                                            >
+                                                Busca
+                                            </label>
+
+                                            <div className="relative">
+                                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                                                <Input
+                                                    id="user-search"
+                                                    value={search}
+                                                    onChange={(event) =>
+                                                        setSearch(
+                                                            event.target.value
+                                                        )
+                                                    }
+                                                    placeholder="Nome, e-mail, cargo ou permissão..."
+                                                    className="pl-9"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">
+                                                Visão
+                                            </label>
+
+                                            <Select
+                                                value={viewFilter}
+                                                onValueChange={(value) =>
+                                                    setViewFilter(
+                                                        value as UserViewFilter
                                                     )
                                                 }
-                                                placeholder="Nome, email ou cargo..."
-                                                className="pl-9"
-                                            />
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+
+                                                <SelectContent>
+                                                    <SelectItem value="all">
+                                                        Todos os usuários
+                                                    </SelectItem>
+                                                    <SelectItem value="pending">
+                                                        Aguardando ativação
+                                                    </SelectItem>
+                                                    <SelectItem value="active">
+                                                        Acessos ativos
+                                                    </SelectItem>
+                                                    <SelectItem value="inactive">
+                                                        Contas inativas
+                                                    </SelectItem>
+                                                    <SelectItem value="admins">
+                                                        Administradores
+                                                    </SelectItem>
+                                                    <SelectItem value="without_role">
+                                                        Sem cargo
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">
-                                            Status
-                                        </label>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">
+                                                Cargo
+                                            </label>
 
-                                        <Select
-                                            value={statusFilter}
-                                            onValueChange={
-                                                setStatusFilter
-                                            }
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
+                                            <Select
+                                                value={roleFilter}
+                                                onValueChange={setRoleFilter}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
 
-                                            <SelectContent>
-                                                <SelectItem value="all">
-                                                    Todos
-                                                </SelectItem>
-                                                <SelectItem value="active">
-                                                    Ativos
-                                                </SelectItem>
-                                                <SelectItem value="inactive">
-                                                    Inativos
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                                <SelectContent>
+                                                    <SelectItem value="all">
+                                                        Todos os cargos
+                                                    </SelectItem>
 
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">
-                                            Cargo
-                                        </label>
-
-                                        <Select
-                                            value={roleFilter}
-                                            onValueChange={
-                                                setRoleFilter
-                                            }
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-
-                                            <SelectContent>
-                                                <SelectItem value="all">
-                                                    Todos
-                                                </SelectItem>
-
-                                                {roleOptions.map(
-                                                    (role) => (
+                                                    {roleOptions.map((role) => (
                                                         <SelectItem
                                                             key={role}
                                                             value={role}
                                                         >
                                                             {role}
                                                         </SelectItem>
-                                                    )
-                                                )}
-                                            </SelectContent>
-                                        </Select>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={clearFilters}
+                                        >
+                                            Limpar
+                                        </Button>
                                     </div>
 
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={clearFilters}
-                                    >
-                                        Limpar
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                    <UsersTable
+                                        users={filteredUsers}
+                                        loading={loading}
+                                        onOpen={(userId) =>
+                                            router.push(`/users/${userId}`)
+                                        }
+                                    />
+                                </CardContent>
+                            </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                    <div>
+                            <div className="grid gap-6 xl:col-span-3">
+                                <Card>
+                                    <CardHeader>
                                         <CardTitle>
-                                            Lista de usuários
+                                            Governança de acesso
                                         </CardTitle>
 
                                         <CardDescription>
-                                            {filteredUsers.length} de{" "}
-                                            {users.length} usuário(s)
-                                            exibido(s)
+                                            Situação dos acessos e pontos para revisão.
                                         </CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
+                                    </CardHeader>
 
-                            <CardContent className="p-0">
-                                <div className="overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="min-w-[260px]">
-                                                    Usuário
-                                                </TableHead>
+                                    <CardContent className="space-y-6">
+                                        <div>
+                                            <div
+                                                className="flex h-2 overflow-hidden rounded-full bg-muted"
+                                                role="img"
+                                                aria-label="Distribuição entre usuários ativos e inativos"
+                                            >
+                                                <span
+                                                    className="bg-green-600"
+                                                    style={{
+                                                        width: `${getPercentage(
+                                                            stats.active
+                                                        )}%`,
+                                                    }}
+                                                />
 
-                                                <TableHead className="min-w-[220px]">
-                                                    Cargos
-                                                </TableHead>
+                                                <span
+                                                    className="bg-red-500"
+                                                    style={{
+                                                        width: `${getPercentage(
+                                                            stats.inactive
+                                                        )}%`,
+                                                    }}
+                                                />
+                                            </div>
 
-                                                <TableHead>
-                                                    Status
-                                                </TableHead>
+                                            <div className="mt-4 grid grid-cols-2 gap-3">
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <span className="h-2.5 w-2.5 rounded-full bg-green-600" />
+                                                    <span className="text-muted-foreground">
+                                                        Ativos
+                                                    </span>
+                                                    <span className="ml-auto font-medium tabular-nums">
+                                                        {stats.active}
+                                                    </span>
+                                                </div>
 
-                                                <TableHead className="min-w-[180px]">
-                                                    Atuação
-                                                </TableHead>
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                                                    <span className="text-muted-foreground">
+                                                        Inativos
+                                                    </span>
+                                                    <span className="ml-auto font-medium tabular-nums">
+                                                        {stats.inactive}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                                <TableHead>
-                                                    Criado em
-                                                </TableHead>
+                                        <div className="grid gap-3">
+                                            <GovernanceItem
+                                                icon={
+                                                    <KeyRound className="h-4 w-4" />
+                                                }
+                                                value={stats.withoutRole}
+                                                description="Usuários sem cargo"
+                                            />
 
-                                                <TableHead className="text-right">
-                                                    Ações
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
+                                            <GovernanceItem
+                                                icon={
+                                                    <AlertTriangle className="h-4 w-4" />
+                                                }
+                                                value={stats.activeWithoutRole}
+                                                description="Ativos sem cargo"
+                                            />
 
-                                        <TableBody>
-                                            {loading ? (
-                                                <TableRow>
-                                                    <TableCell
-                                                        colSpan={6}
-                                                        className="h-32 text-center"
-                                                    >
-                                                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                                            Carregando usuários...
+                                            <GovernanceItem
+                                                icon={
+                                                    <ShieldCheck className="h-4 w-4" />
+                                                }
+                                                value={stats.userManagers}
+                                                description="Com permissão USER_MANAGE"
+                                            />
+
+                                            <GovernanceItem
+                                                icon={
+                                                    <CalendarClock className="h-4 w-4" />
+                                                }
+                                                value={stats.recentRegistrations}
+                                                description="Cadastrados nos últimos 30 dias"
+                                            />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>
+                                            Cobertura por cargo
+                                        </CardTitle>
+
+                                        <CardDescription>
+                                            Cargos com mais usuários associados.
+                                        </CardDescription>
+                                    </CardHeader>
+
+                                    <CardContent>
+                                        {roleDistribution.length === 0 ? (
+                                            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                                                Nenhum cargo atribuído.
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {roleDistribution.map(
+                                                    (role) => (
+                                                        <div
+                                                            key={role.name}
+                                                            className="flex items-center gap-3"
+                                                        >
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="truncate text-sm font-medium">
+                                                                    {role.name}
+                                                                </p>
+
+                                                                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                                                                    <div
+                                                                        className="h-full rounded-full bg-primary"
+                                                                        style={{
+                                                                            width: `${
+                                                                                stats.total > 0
+                                                                                    ? (role.total /
+                                                                                          stats.total) *
+                                                                                      100
+                                                                                    : 0
+                                                                            }%`,
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <span className="text-sm font-medium tabular-nums">
+                                                                {role.total}
+                                                            </span>
                                                         </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : filteredUsers.length ===
-                                              0 ? (
-                                                <TableRow>
-                                                    <TableCell
-                                                        colSpan={6}
-                                                        className="h-32 text-center text-sm text-muted-foreground"
-                                                    >
-                                                        Nenhum usuário
-                                                        encontrado.
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                filteredUsers.map(
-                                                    (user) => {
-                                                        const roleNames =
-                                                            user.roles.map(
-                                                                (
-                                                                    role
-                                                                ) =>
-                                                                    getRoleName(
-                                                                        role
-                                                                    )
-                                                            )
-
-                                                        return (
-                                                            <TableRow
-                                                                key={
-                                                                    user.id
-                                                                }
-                                                            >
-                                                                <TableCell>
-                                                                    <div className="flex min-w-0 items-center gap-3">
-                                                                        {user.photoUrl ? (
-                                                                            <img
-                                                                                src={
-                                                                                    user.photoUrl
-                                                                                }
-                                                                                alt={
-                                                                                    user.name
-                                                                                }
-                                                                                className="h-10 w-10 rounded-full object-cover"
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold">
-                                                                                {getUserInitials(
-                                                                                    user.name
-                                                                                )}
-                                                                            </div>
-                                                                        )}
-
-                                                                        <div className="min-w-0">
-                                                                            <p className="truncate font-medium">
-                                                                                {
-                                                                                    user.name
-                                                                                }
-                                                                            </p>
-
-                                                                            <p className="truncate text-sm text-muted-foreground">
-                                                                                {
-                                                                                    user.email
-                                                                                }
-                                                                            </p>
-                                                                        </div>
-                                                                    </div>
-                                                                </TableCell>
-
-                                                                <TableCell>
-                                                                    <div className="flex max-w-[280px] flex-wrap gap-2">
-                                                                        {roleNames.length >
-                                                                        0 ? (
-                                                                            roleNames.map(
-                                                                                (
-                                                                                    role
-                                                                                ) => (
-                                                                                    <span
-                                                                                        key={
-                                                                                            role
-                                                                                        }
-                                                                                    >
-                                                                                        {getRoleBadge(
-                                                                                            role
-                                                                                        )}
-                                                                                    </span>
-                                                                                )
-                                                                            )
-                                                                        ) : (
-                                                                            <Badge variant="outline">
-                                                                                Sem cargo
-                                                                            </Badge>
-                                                                        )}
-                                                                    </div>
-                                                                </TableCell>
-
-                                                                <TableCell>
-                                                                    {getStatusBadge(
-                                                                        user.status
-                                                                    )}
-                                                                </TableCell>
-
-                                                                <TableCell>
-                                                                    <div className="space-y-1 text-xs text-muted-foreground">
-                                                                        <p>
-                                                                            RMs criadas:{" "}
-                                                                            <span className="font-medium text-foreground">
-                                                                                {user
-                                                                                    .counters
-                                                                                    ?.createdRisks ??
-                                                                                    0}
-                                                                            </span>
-                                                                        </p>
-
-                                                                        <p>
-                                                                            RMs atribuídas:{" "}
-                                                                            <span className="font-medium text-foreground">
-                                                                                {user
-                                                                                    .counters
-                                                                                    ?.assignedRisks ??
-                                                                                    0}
-                                                                            </span>
-                                                                        </p>
-
-                                                                        <p>
-                                                                            Logística:{" "}
-                                                                            <span className="font-medium text-foreground">
-                                                                                {user
-                                                                                    .counters
-                                                                                    ?.assignedLogistics ??
-                                                                                    0}
-                                                                            </span>
-                                                                        </p>
-                                                                    </div>
-                                                                </TableCell>
-
-                                                                <TableCell>
-                                                                    {formatDate(
-                                                                        user.createdAt
-                                                                    )}
-                                                                </TableCell>
-
-                                                                <TableCell className="text-right">
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        onClick={() =>
-                                                                            router.push(
-                                                                                `/users/${user.id}`
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <Eye className="mr-2 h-4 w-4" />
-                                                                        Visualizar
-                                                                    </Button>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )
-                                                    }
-                                                )
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                                    )
+                                                )}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
                     </main>
                 </SidebarInset>
             </SidebarProvider>
         </ProtectedRoute>
+    )
+}
+
+function UsersTable({
+    users,
+    loading,
+    onOpen,
+}: {
+    users: UserRow[]
+    loading: boolean
+    onOpen: (userId: string) => void
+}) {
+    return (
+        <div className="overflow-x-auto">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="min-w-[260px]">
+                            Usuário
+                        </TableHead>
+                        <TableHead className="min-w-[210px]">
+                            Cargos
+                        </TableHead>
+                        <TableHead>Acesso</TableHead>
+                        <TableHead className="min-w-[170px]">
+                            Governança
+                        </TableHead>
+                        <TableHead className="min-w-[170px]">
+                            Atuação
+                        </TableHead>
+                        <TableHead>Criado em</TableHead>
+                        <TableHead className="text-right">
+                            Ação
+                        </TableHead>
+                    </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                    {loading ? (
+                        <TableRow>
+                            <TableCell
+                                colSpan={7}
+                                className="h-40 text-center"
+                            >
+                                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Carregando usuários...
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ) : users.length === 0 ? (
+                        <TableRow>
+                            <TableCell
+                                colSpan={7}
+                                className="h-40 text-center text-sm text-muted-foreground"
+                            >
+                                Nenhum usuário encontrado.
+                            </TableCell>
+                        </TableRow>
+                    ) : (
+                        users.map((user) => {
+                            const roleNames = getRoleNames(user)
+                            const pending = isPendingApproval(user)
+                            const activityTotal =
+                                getActivityTotal(user)
+
+                            return (
+                                <TableRow
+                                    key={user.id}
+                                    className={
+                                        pending
+                                            ? "bg-yellow-50/60 dark:bg-yellow-950/10"
+                                            : undefined
+                                    }
+                                >
+                                    <TableCell>
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <Avatar className="h-10 w-10">
+                                                {user.photoUrl && (
+                                                    <AvatarImage
+                                                        src={user.photoUrl}
+                                                        alt={user.name}
+                                                    />
+                                                )}
+
+                                                <AvatarFallback>
+                                                    {getUserInitials(
+                                                        user.name
+                                                    )}
+                                                </AvatarFallback>
+                                            </Avatar>
+
+                                            <div className="min-w-0">
+                                                <p className="truncate font-medium">
+                                                    {user.name}
+                                                </p>
+
+                                                <p className="truncate text-sm text-muted-foreground">
+                                                    {user.email}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+
+                                    <TableCell>
+                                        <div className="flex max-w-[260px] flex-wrap gap-1.5">
+                                            {roleNames.length > 0 ? (
+                                                roleNames.map((role) => (
+                                                    <span key={role}>
+                                                        {getRoleBadge(role)}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <Badge variant="outline">
+                                                    Sem cargo
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </TableCell>
+
+                                    <TableCell>
+                                        {getAccessBadge(user)}
+                                    </TableCell>
+
+                                    <TableCell>
+                                        <div className="space-y-1 text-xs text-muted-foreground">
+                                            <p>
+                                                Permissões:{" "}
+                                                <span className="font-medium text-foreground">
+                                                    {
+                                                        user.permissions
+                                                            .length
+                                                    }
+                                                </span>
+                                            </p>
+
+                                            {user.permissions.includes(
+                                                "USER_MANAGE"
+                                            ) && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px]"
+                                                >
+                                                    USER_MANAGE
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </TableCell>
+
+                                    <TableCell>
+                                        <div className="space-y-1 text-xs text-muted-foreground">
+                                            <p>
+                                                Total:{" "}
+                                                <span className="font-medium text-foreground">
+                                                    {activityTotal}
+                                                </span>
+                                            </p>
+
+                                            <p>
+                                                RMs:{" "}
+                                                <span className="font-medium text-foreground">
+                                                    {user.counters
+                                                        .createdRisks +
+                                                        user.counters
+                                                            .assignedRisks}
+                                                </span>{" "}
+                                                · Logística:{" "}
+                                                <span className="font-medium text-foreground">
+                                                    {user.counters
+                                                        .requestedLogistics +
+                                                        user.counters
+                                                            .assignedLogistics +
+                                                        user.counters
+                                                            .reviewedLogistics}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    </TableCell>
+
+                                    <TableCell>
+                                        {formatDate(user.createdAt)}
+                                    </TableCell>
+
+                                    <TableCell className="text-right">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={
+                                                pending
+                                                    ? "default"
+                                                    : "outline"
+                                            }
+                                            onClick={() =>
+                                                onOpen(user.id)
+                                            }
+                                        >
+                                            <Eye className="mr-2 h-4 w-4" />
+                                            {pending
+                                                ? "Analisar"
+                                                : "Visualizar"}
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        })
+                    )}
+                </TableBody>
+            </Table>
+        </div>
     )
 }

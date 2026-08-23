@@ -488,7 +488,7 @@ export default function WeeklySnapshotSettingsPage() {
     }
 
     return (
-        <ProtectedRoute>
+        <ProtectedRoute permission="RISK_CREATE">
             <SidebarProvider>
                 <AppSidebar variant="inset" />
 

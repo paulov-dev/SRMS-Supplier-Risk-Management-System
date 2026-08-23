@@ -50,6 +50,95 @@ function toNumberOrUndefined(value: string | null) {
     return parsed
 }
 
+function buildCurrentRiskTeamState(users: any[]) {
+    const analysts = users.map((user) => {
+        const risks = user.assignedRisks || []
+        const parts = risks.flatMap(
+            (risk: any) => risk.parts || []
+        )
+
+        return {
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                photoUrl: user.photoUrl,
+            },
+
+            risks: {
+                open: risks.length,
+                red: risks.filter(
+                    (risk: any) => risk.riskLevel === "RED"
+                ).length,
+                yellow: risks.filter(
+                    (risk: any) => risk.riskLevel === "YELLOW"
+                ).length,
+                green: risks.filter(
+                    (risk: any) => risk.riskLevel === "GREEN"
+                ).length,
+                orange: risks.filter(
+                    (risk: any) => risk.riskLevel === "ORANGE"
+                ).length,
+                grey: risks.filter(
+                    (risk: any) => risk.riskLevel === "GREY"
+                ).length,
+                blue: risks.filter(
+                    (risk: any) => risk.riskLevel === "BLUE"
+                ).length,
+            },
+
+            parts: {
+                total: parts.length,
+                red: parts.filter(
+                    (part: any) => part.status === "RED"
+                ).length,
+                yellow: parts.filter(
+                    (part: any) => part.status === "YELLOW"
+                ).length,
+                green: parts.filter(
+                    (part: any) => part.status === "GREEN"
+                ).length,
+                orange: parts.filter(
+                    (part: any) => part.status === "ORANGE"
+                ).length,
+                grey: parts.filter(
+                    (part: any) => part.status === "GREY"
+                ).length,
+                blue: parts.filter(
+                    (part: any) => part.status === "BLUE"
+                ).length,
+                withoutDemand: parts.filter(
+                    (part: any) =>
+                        part.assessment?.hasDemand === false
+                ).length,
+                completed: parts.filter(
+                    (part: any) => part.status === "BLUE"
+                ).length,
+            },
+        }
+    })
+
+    analysts.sort((analystA, analystB) => {
+        if (analystB.risks.open !== analystA.risks.open) {
+            return analystB.risks.open - analystA.risks.open
+        }
+
+        if (analystB.risks.red !== analystA.risks.red) {
+            return analystB.risks.red - analystA.risks.red
+        }
+
+        return analystA.user.name.localeCompare(
+            analystB.user.name,
+            "pt-BR"
+        )
+    })
+
+    return {
+        generatedAt: new Date().toISOString(),
+        analysts,
+    }
+}
+
 function formatSnapshot(snapshot: any) {
     return {
         id: snapshot.id,
@@ -337,6 +426,7 @@ export async function GET(req: NextRequest) {
             availableYears,
             availableMonths,
             availableWeeks,
+            riskTeamUsers,
         ] = await Promise.all([
             prisma.weeklySnapshot.findMany({
                 where,
@@ -461,6 +551,53 @@ export async function GET(req: NextRequest) {
                     week: "asc",
                 },
             }),
+
+            /*
+             * Posição atual do time de Risk.
+             * Essa consulta é ao vivo e não depende do snapshot selecionado.
+             */
+            prisma.user.findMany({
+                where: {
+                    isActive: true,
+                    roles: {
+                        some: {
+                            role: {
+                                name: "RISK_ANALYST",
+                            },
+                        },
+                    },
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    photoUrl: true,
+
+                    assignedRisks: {
+                        where: {
+                            workflowStatus: "OPEN",
+                        },
+                        select: {
+                            id: true,
+                            riskLevel: true,
+                            parts: {
+                                select: {
+                                    id: true,
+                                    status: true,
+                                    assessment: {
+                                        select: {
+                                            hasDemand: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                orderBy: {
+                    name: "asc",
+                },
+            }),
         ])
 
         return NextResponse.json({
@@ -486,6 +623,8 @@ export async function GET(req: NextRequest) {
             logisticsSnapshots:
                 logisticsSnapshots.map(formatLogisticsSnapshot),
             events: events.map(formatEvent),
+            teamCurrentState:
+                buildCurrentRiskTeamState(riskTeamUsers),
         })
     } catch (error) {
         console.error(error)

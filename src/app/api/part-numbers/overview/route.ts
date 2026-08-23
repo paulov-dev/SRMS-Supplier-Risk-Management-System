@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import {
     PartRiskStatus,
     Prisma,
+    RiskPartLogisticsStatus,
     RiskWorkflowStatus,
 } from "@prisma/client"
 
@@ -36,6 +37,20 @@ function getWorstPartStatus(statuses: PartRiskStatus[]) {
     if (statuses.includes("ORANGE")) return "ORANGE"
     if (statuses.includes("GREY")) return "GREY"
     if (statuses.includes("BLUE")) return "BLUE"
+
+    return statuses[0]
+}
+
+function getConsolidatedLogisticsStatus(
+    statuses: RiskPartLogisticsStatus[]
+) {
+    if (statuses.length === 0) return null
+
+    if (statuses.includes("REJECTED")) return "REJECTED"
+    if (statuses.includes("IN_LOGISTICS")) return "IN_LOGISTICS"
+    if (statuses.includes("REQUESTED")) return "REQUESTED"
+    if (statuses.includes("APPROVED")) return "APPROVED"
+    if (statuses.includes("NOT_REQUESTED")) return "NOT_REQUESTED"
 
     return statuses[0]
 }
@@ -167,6 +182,15 @@ export async function GET(req: Request) {
 
         const hasOverdueActions =
             searchParams.get("hasOverdueActions") === "true"
+
+        const logisticsStatus =
+            searchParams.get("logisticsStatus")?.trim() || "all"
+
+        const operationalStatusFilter =
+            searchParams.get("operationalStatus")?.trim() || "all"
+
+        const sortBy =
+            searchParams.get("sortBy")?.trim() || "operationalStatus"
 
         const partNumberWhere: Prisma.PartNumberWhereInput = {
             ...(search
@@ -327,6 +351,14 @@ export async function GET(req: Request) {
             const consolidatedStatus =
                 getWorstPartStatus(statuses)
 
+            const consolidatedLogisticsStatus =
+                getConsolidatedLogisticsStatus(
+                    riskParts.map(
+                        (riskPart) =>
+                            riskPart.logisticsStatus
+                    )
+                )
+
             const riskEvents = riskParts.map((riskPart) => ({
                 id: riskPart.riskEvent.id,
                 code: riskPart.riskEvent.code,
@@ -420,6 +452,95 @@ export async function GET(req: Request) {
                     new Date(a).getTime()
             )[0]
 
+            const hasActiveVehicleApplication =
+                part.vehicleApplications.some(
+                    (application) => application.isActive
+                )
+
+            const operationalReasons: string[] = []
+
+            if (consolidatedStatus === "RED") {
+                operationalReasons.push("PN em status vermelho")
+            }
+
+            if (consolidatedStatus === "YELLOW") {
+                operationalReasons.push(
+                    allActionPlans.length === 0
+                        ? "PN amarelo sem plano de ação relacionado"
+                        : "PN em status amarelo"
+                )
+            }
+
+            if (consolidatedStatus === "ORANGE") {
+                operationalReasons.push("PN em status laranja")
+            }
+
+            if (consolidatedStatus === "GREEN") {
+                operationalReasons.push(
+                    allActionPlans.length === 0
+                        ? "PN verde sem plano de ação relacionado"
+                        : "PN verde em monitoramento"
+                )
+            }
+
+            if (overdueActionPlans.length > 0) {
+                operationalReasons.push(
+                    `${overdueActionPlans.length} plano(s) atrasado(s)`
+                )
+            }
+
+            if (consolidatedLogisticsStatus === "REJECTED") {
+                operationalReasons.push(
+                    "Solicitação logística rejeitada"
+                )
+            }
+
+            if (consolidatedLogisticsStatus === "IN_LOGISTICS") {
+                operationalReasons.push(
+                    "PN atualmente em análise pela Logística"
+                )
+            }
+
+            if (consolidatedLogisticsStatus === "REQUESTED") {
+                operationalReasons.push(
+                    "Solicitação enviada e aguardando a Logística"
+                )
+            }
+
+            if (riskResponsibles.length === 0) {
+                operationalReasons.push("RM sem responsável Risk")
+            }
+
+            if (pnResponsibles.length === 0) {
+                operationalReasons.push("PN sem responsável")
+            }
+
+            if (!hasActiveVehicleApplication) {
+                operationalReasons.push("Sem aplicação ativa")
+            }
+
+            const operationalStatus =
+                consolidatedStatus === "RED" ||
+                    overdueActionPlans.length > 0 ||
+                    consolidatedLogisticsStatus === "REJECTED" ||
+                    (consolidatedStatus === "YELLOW" &&
+                        allActionPlans.length === 0)
+                    ? "IMMEDIATE_ACTION"
+                    : consolidatedStatus === "BLUE"
+                        ? "COMPLETED"
+                    : consolidatedStatus === "YELLOW" ||
+                        (consolidatedStatus === "GREEN" &&
+                            allActionPlans.length === 0)
+                        ? "ATTENTION"
+                        : consolidatedLogisticsStatus === "REQUESTED" ||
+                            consolidatedLogisticsStatus === "IN_LOGISTICS"
+                            ? "WAITING_LOGISTICS"
+                            : riskResponsibles.length === 0 ||
+                                pnResponsibles.length === 0 ||
+                                !hasActiveVehicleApplication
+                                ? "REGISTRATION_ADJUSTMENT"
+                                : "MONITORING"
+
             return {
                 id: part.id,
                 partNumber: part.partNumber,
@@ -469,6 +590,24 @@ export async function GET(req: Request) {
                     closedRms: closedRms.length,
                 },
 
+                analysis: {
+                    operationalStatus,
+                    operationalReasons,
+                    isCompleted:
+                        consolidatedStatus === "BLUE",
+                    withoutRiskResponsible:
+                        riskResponsibles.length === 0,
+                    withoutPnResponsible:
+                        pnResponsibles.length === 0,
+                    withoutActiveVehicleApplication:
+                        !hasActiveVehicleApplication,
+                },
+
+                logistics: {
+                    consolidatedStatus:
+                        consolidatedLogisticsStatus,
+                },
+
                 updatedAt,
             }
         })
@@ -488,6 +627,95 @@ export async function GET(req: Request) {
                 (part) => part.actionPlans.overdue > 0
             )
         }
+
+        if (logisticsStatus !== "all") {
+            filtered = filtered.filter(
+                (part) =>
+                    part.logistics.consolidatedStatus ===
+                    logisticsStatus
+            )
+        }
+
+        if (operationalStatusFilter !== "all") {
+            filtered = filtered.filter(
+                (part) =>
+                    part.analysis.operationalStatus ===
+                    operationalStatusFilter
+            )
+        }
+
+        const operationalStatusOrder: Record<string, number> = {
+            IMMEDIATE_ACTION: 0,
+            ATTENTION: 1,
+            WAITING_LOGISTICS: 2,
+            REGISTRATION_ADJUSTMENT: 3,
+            MONITORING: 4,
+            COMPLETED: 5,
+        }
+
+        filtered.sort((partA, partB) => {
+            if (sortBy === "partNumber") {
+                return partA.partNumber.localeCompare(
+                    partB.partNumber,
+                    "pt-BR"
+                )
+            }
+
+            if (sortBy === "updatedAt") {
+                return (
+                    new Date(partB.updatedAt).getTime() -
+                    new Date(partA.updatedAt).getTime()
+                )
+            }
+
+            if (sortBy === "openRms") {
+                return (
+                    partB.usage.openRms -
+                    partA.usage.openRms
+                )
+            }
+
+            if (sortBy === "overdue") {
+                return (
+                    partB.actionPlans.overdue -
+                    partA.actionPlans.overdue
+                )
+            }
+
+            const operationalStatusDelta =
+                operationalStatusOrder[
+                    partA.analysis.operationalStatus
+                ] -
+                operationalStatusOrder[
+                    partB.analysis.operationalStatus
+                ]
+
+            if (operationalStatusDelta !== 0) {
+                return operationalStatusDelta
+            }
+
+            if (
+                partB.actionPlans.overdue !==
+                partA.actionPlans.overdue
+            ) {
+                return (
+                    partB.actionPlans.overdue -
+                    partA.actionPlans.overdue
+                )
+            }
+
+            if (partB.usage.openRms !== partA.usage.openRms) {
+                return (
+                    partB.usage.openRms -
+                    partA.usage.openRms
+                )
+            }
+
+            return partA.partNumber.localeCompare(
+                partB.partNumber,
+                "pt-BR"
+            )
+        })
 
         const total = filtered.length
 
@@ -516,6 +744,91 @@ export async function GET(req: Request) {
             partNumbersWithOverdueActions: statsBase.filter(
                 (part) => part.actionPlans.overdue > 0
             ).length,
+            completedPartNumbers: statsBase.filter(
+                (part) => part.analysis.isCompleted
+            ).length,
+            operationalQueuePartNumbers: statsBase.filter(
+                (part) =>
+                    part.analysis.operationalStatus !==
+                    "MONITORING" &&
+                    part.analysis.operationalStatus !==
+                    "COMPLETED"
+            ).length,
+            partNumbersWithoutRiskResponsible: statsBase.filter(
+                (part) =>
+                    part.analysis.withoutRiskResponsible
+            ).length,
+            partNumbersWithoutPnResponsible: statsBase.filter(
+                (part) => part.analysis.withoutPnResponsible
+            ).length,
+            partNumbersWithoutActiveApplication: statsBase.filter(
+                (part) =>
+                    part.analysis.withoutActiveVehicleApplication
+            ).length,
+            totalOpenActionPlans: statsBase.reduce(
+                (total, part) =>
+                    total + part.actionPlans.open,
+                0
+            ),
+            totalOverdueActionPlans: statsBase.reduce(
+                (total, part) =>
+                    total + part.actionPlans.overdue,
+                0
+            ),
+            statusDistribution: {
+                red: statsBase.filter(
+                    (part) => part.consolidatedStatus === "RED"
+                ).length,
+                yellow: statsBase.filter(
+                    (part) => part.consolidatedStatus === "YELLOW"
+                ).length,
+                green: statsBase.filter(
+                    (part) => part.consolidatedStatus === "GREEN"
+                ).length,
+                orange: statsBase.filter(
+                    (part) => part.consolidatedStatus === "ORANGE"
+                ).length,
+                grey: statsBase.filter(
+                    (part) => part.consolidatedStatus === "GREY"
+                ).length,
+                blue: statsBase.filter(
+                    (part) => part.consolidatedStatus === "BLUE"
+                ).length,
+                withoutStatus: statsBase.filter(
+                    (part) => !part.consolidatedStatus
+                ).length,
+            },
+            logisticsDistribution: {
+                notRequested: statsBase.filter(
+                    (part) =>
+                        part.logistics.consolidatedStatus ===
+                        "NOT_REQUESTED"
+                ).length,
+                requested: statsBase.filter(
+                    (part) =>
+                        part.logistics.consolidatedStatus ===
+                        "REQUESTED"
+                ).length,
+                inLogistics: statsBase.filter(
+                    (part) =>
+                        part.logistics.consolidatedStatus ===
+                        "IN_LOGISTICS"
+                ).length,
+                approved: statsBase.filter(
+                    (part) =>
+                        part.logistics.consolidatedStatus ===
+                        "APPROVED"
+                ).length,
+                rejected: statsBase.filter(
+                    (part) =>
+                        part.logistics.consolidatedStatus ===
+                        "REJECTED"
+                ).length,
+                withoutStatus: statsBase.filter(
+                    (part) =>
+                        !part.logistics.consolidatedStatus
+                ).length,
+            },
         }
 
         return NextResponse.json({
