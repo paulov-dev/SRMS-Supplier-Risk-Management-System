@@ -28,6 +28,8 @@ type NotificationType =
   | "USER_ROLE_REMOVED"
   | "LOGISTICS_REQUEST_IN_REVIEW"
   | "LOGISTICS_REQUEST_CANCELED"
+  | "USER_BLOCKED"
+  | "USER_UNBLOCKED"
 
 type CreateNotificationInput = {
   userId: string

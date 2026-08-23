@@ -130,7 +130,7 @@ export default function UserDetailsPage() {
     loggedUser?.id === profile?.id
 
   const isAdmin =
-    loggedUser?.permissions?.includes("USER_MANAGE") ||
+    loggedUser?.permissions?.includes("USER_VIEW") ||
     loggedUser?.roles?.includes("ADMIN")
 
   const canEditProfile =
@@ -149,11 +149,15 @@ export default function UserDetailsPage() {
         }
       )
 
-      if (!res.ok) {
-        throw new Error("Erro ao buscar usuário")
-      }
-
       const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(
+          data.details ||
+          data.error ||
+          "Erro ao buscar usuário"
+        )
+      }
 
       setProfile(data)
     } catch (error) {
