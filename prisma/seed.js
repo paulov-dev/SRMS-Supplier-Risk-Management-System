@@ -9,6 +9,7 @@ async function main() {
   // =========================
   const permissions = [
     'USER_MANAGE',
+    'USER_VIEW',
     'SUPPLIER_MANAGE',
     'SUPPLIER_VIEW',
     'SUPPLIER_CREATE',
@@ -21,6 +22,7 @@ async function main() {
     'LOGISTICS_REQUEST_CREATE',
     'LOGISTICS_REQUEST_REVIEW',
     'LOGISTICS_BUFFER_MANAGE',
+    'LOGISTICS_ANALYST',
     'COMMENT_CREATE',
     'COMMENT_VIEW',
     'DASHBOARD_VIEW',
@@ -144,7 +146,8 @@ async function main() {
       'COMMENT_CREATE',
       'COMMENT_VIEW',
       'DASHBOARD_VIEW',
-      'ANALYTICS_VIEW'
+      'ANALYTICS_VIEW',
+      'USER_VIEW'
     ]
   )
 
@@ -158,7 +161,8 @@ async function main() {
       'RISK_UPDATE',
       'COMMENT_CREATE',
       'COMMENT_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'USER_VIEW'
     ]
   )
 
@@ -170,9 +174,11 @@ async function main() {
       'RISK_VIEW',
       'LOGISTICS_REQUEST_REVIEW',
       'LOGISTICS_BUFFER_MANAGE',
+      'LOGISTICS_ANALYST',
       'COMMENT_CREATE',
       'COMMENT_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'USER_VIEW'      
     ]
   )
 
@@ -183,7 +189,8 @@ async function main() {
       'SUPPLIER_VIEW',
       'RISK_VIEW',
       'COMMENT_VIEW',
-      'DASHBOARD_VIEW'
+      'DASHBOARD_VIEW',
+      'USER_VIEW'
     ]
   )
 

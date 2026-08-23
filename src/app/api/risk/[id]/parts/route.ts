@@ -349,6 +349,7 @@ export async function POST(
 
     if (
       !hasAnyPermission(permissions, [
+        "RISK_VIEW",
         "RISK_UPDATE",
         "RISK_CREATE",
         "USER_MANAGE",

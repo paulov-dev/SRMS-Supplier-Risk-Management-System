@@ -94,6 +94,13 @@ function formatLogisticsRequest(request: any) {
                 status: request.riskEventPart.status,
                 logisticsStatus:
                     request.riskEventPart.logisticsStatus,
+                assignedTo: request.riskEventPart.assignedTo
+                    ? {
+                        id: request.riskEventPart.assignedTo.id,
+                        name: request.riskEventPart.assignedTo.name,
+                        email: request.riskEventPart.assignedTo.email,
+                    }
+                    : null,
                 partNumber: request.riskEventPart.partNumber,
             }
             : null,
@@ -145,7 +152,7 @@ export async function PATCH(
         const canReviewLogistics = hasAnyPermission(
             permissions,
             [
-                "LOGISTICS_REQUEST_REVIEW",
+                "LOGISTICS_ANALYST",
                 "USER_MANAGE",
             ]
         )
@@ -205,6 +212,13 @@ export async function PATCH(
                                     partNumber: true,
                                     description: true,
                                     vehicleProgram: true,
+                                },
+                            },
+                            assignedTo: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
                                 },
                             },
                         },
@@ -516,8 +530,12 @@ export async function PATCH(
                     id: currentRequest.riskEventPartId,
                 },
                 data: {
-                    logisticsStatus:
-                        nextRiskPartLogisticsStatus,
+                    logisticsStatus: nextRiskPartLogisticsStatus,
+                    ...(action === "APPROVE"
+                        ? {
+                            assignedToId: currentUser.id,
+                        }
+                        : {}),
                 },
             })
 
@@ -530,23 +548,46 @@ export async function PATCH(
                         currentRequest.riskEventPart.partNumber.id,
                     changeType:
                         RiskPartHistoryType.LOGISTICS_CHANGE,
+
                     oldLogisticsStatus:
-                        currentRequest.riskEventPart
-                            .logisticsStatus,
+                        currentRequest.riskEventPart.logisticsStatus,
                     newLogisticsStatus:
                         nextRiskPartLogisticsStatus,
+
+                    oldAssignedToId:
+                        currentRequest.riskEventPart.assignedToId,
+                    newAssignedToId:
+                        action === "APPROVE"
+                            ? currentUser.id
+                            : currentRequest.riskEventPart.assignedToId,
+
                     reason:
                         action === "ACCEPT"
-                            ? "Solicitação logística assumida pelo time de Logística."
+                            ? `Solicitação logística ${currentRequest.code} assumida por ${currentUser.name}.`
                             : action === "APPROVE"
-                                ? "Solicitação logística aprovada/concluída."
+                                ? currentRequest.type ===
+                                    LogisticsRequestType.BUFFER_CALCULATION
+                                    ? `Cálculo de buffer respondido na solicitação ${currentRequest.code}. Quantidade calculada: ${calculatedQuantity ?? "-"
+                                    }. ${cutoffReference
+                                        ? `Ponto de corte: ${cutoffReference}. `
+                                        : ""
+                                    }${responseNotes
+                                        ? `Resposta da Logística: ${responseNotes}`
+                                        : ""
+                                    }`
+                                    : `Solicitação ${currentRequest.code} aprovada para inclusão/acompanhamento no book logístico. ${cutoffReference
+                                        ? `Ponto de corte: ${cutoffReference}. `
+                                        : ""
+                                    }${responseNotes
+                                        ? `Resposta da Logística: ${responseNotes}`
+                                        : ""
+                                    }`
                                 : action === "REJECT"
-                                    ? `Solicitação logística recusada: ${rejectionReason}`
-                                    : "Solicitação logística cancelada.",
+                                    ? `Solicitação logística ${currentRequest.code} recusada: ${rejectionReason}`
+                                    : `Solicitação logística ${currentRequest.code} cancelada.`,
                     changedById: currentUser.id,
                 },
             })
-
             await createAuditLog(tx, {
                 entityType: "LogisticsRequest",
                 entityId: request.id,
@@ -579,6 +620,14 @@ export async function PATCH(
                         request.calculatedQuantity,
                     cutoffDate: request.cutoffDate,
                     cutoffReference: request.cutoffReference,
+                    pnAssignedTo:
+                        action === "APPROVE"
+                            ? {
+                                id: currentUser.id,
+                                name: currentUser.name,
+                                email: currentUser.email,
+                            }
+                            : null,
                     riskEvent: {
                         id: request.riskEvent.id,
                         code: request.riskEvent.code,

@@ -1295,22 +1295,29 @@ export default function RiskDetailPage() {
 
     async function loadUsers() {
         try {
-            const res = await fetch("/api/users/options", {
+            const res = await fetch("/api/users", {
                 credentials: "include",
             })
 
             const data = await res.json()
 
             if (!res.ok) {
+                if (res.status === 403) {
+                    setUsers([])
+                    return
+                }
+
                 throw new Error(
                     data.error ||
                     "Erro ao carregar responsáveis"
                 )
             }
 
-            setUsers(Array.isArray(data) ? data : data.data || [])
+            setUsers(data.data || data)
         } catch (error) {
             console.error(error)
+
+            setUsers([])
 
             toast.error(
                 error instanceof Error
@@ -1329,6 +1336,18 @@ export default function RiskDetailPage() {
             risk.assignedTo?.id === user.id
 
         return isAdmin || isResponsible
+    }
+
+    function canManageRiskOperationalActions() {
+        if (!risk || !user) {
+            return false
+        }
+
+        if (risk.workflowStatus !== "OPEN") {
+            return false
+        }
+
+        return canEditRisk()
     }
 
     function openEditRiskDialog() {
@@ -2581,7 +2600,7 @@ export default function RiskDetailPage() {
                                                         Part Numbers
                                                     </CardTitle>
 
-                                                    {risk.workflowStatus === "OPEN" && (
+                                                    {risk.workflowStatus === "OPEN" && canManageRiskOperationalActions() && (
                                                         <Button
                                                             type="button"
                                                             size="sm"
@@ -2736,7 +2755,7 @@ export default function RiskDetailPage() {
                                                         Planos de Ação
                                                     </CardTitle>
 
-                                                    {risk.workflowStatus === "OPEN" &&
+                                                    {risk.workflowStatus === "OPEN" && canManageRiskOperationalActions() && 
                                                         (isAdmin || isRiskOwner) && (
                                                             <Button
                                                                 type="button"
@@ -2898,7 +2917,7 @@ export default function RiskDetailPage() {
                                                         </CardDescription>
                                                     </div>
 
-                                                    {risk.workflowStatus === "OPEN" && (
+                                                    {risk.workflowStatus === "OPEN" && canManageRiskOperationalActions() && (
                                                         <Button
                                                             type="button"
                                                             size="sm"

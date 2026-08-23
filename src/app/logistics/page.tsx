@@ -55,6 +55,13 @@ type LogisticsPriority =
     | "HIGH"
     | "CRITICAL"
 
+type LogisticsTab =
+    | "pending"
+    | "in_review"
+    | "mine"
+    | "responded"
+    | "all"
+
 type LogisticsRequest = {
     id: string
     code: string
@@ -151,6 +158,17 @@ type LogisticsResponse = {
 
 type ActionMode = "APPROVE" | "REJECT"
 
+type CurrentUser = {
+    id: string
+    name: string
+    email: string
+    permissions?: string[]
+    roles?: {
+        id?: string
+        name: string
+    }[]
+}
+
 function Pill({
     children,
     backgroundColor,
@@ -245,6 +263,23 @@ function getPriorityLabel(priority: LogisticsPriority) {
     }
 }
 
+function getTabLabel(tab: LogisticsTab) {
+    switch (tab) {
+        case "pending":
+            return "Pendentes"
+        case "in_review":
+            return "Em análise"
+        case "mine":
+            return "Minhas"
+        case "responded":
+            return "Respondidas"
+        case "all":
+            return "Todas"
+        default:
+            return tab
+    }
+}
+
 function formatDate(value: string | null | undefined) {
     if (!value) return "-"
 
@@ -275,6 +310,7 @@ async function readJsonResponse(res: Response) {
 
 export default function LogisticsPage() {
     const [requests, setRequests] = useState<LogisticsRequest[]>([])
+    const [user, setUser] = useState<CurrentUser | null>(null)
     const [stats, setStats] =
         useState<LogisticsResponse["stats"]>({
             total: 0,
@@ -293,16 +329,20 @@ export default function LogisticsPage() {
             totalPages: 1,
         })
 
+    const [activeTab, setActiveTab] =
+        useState<LogisticsTab>("pending")
+
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
     const [search, setSearch] = useState("")
-    const [statusFilter, setStatusFilter] = useState("all")
     const [typeFilter, setTypeFilter] = useState("all")
-    const [onlyPending, setOnlyPending] = useState(true)
-    const [onlyMine, setOnlyMine] = useState(false)
+    const [priorityFilter, setPriorityFilter] = useState("all")
 
     const [selectedRequest, setSelectedRequest] =
+        useState<LogisticsRequest | null>(null)
+
+    const [detailRequest, setDetailRequest] =
         useState<LogisticsRequest | null>(null)
 
     const [actionMode, setActionMode] =
@@ -314,7 +354,53 @@ export default function LogisticsPage() {
     const [cutoffDate, setCutoffDate] = useState("")
     const [cutoffReference, setCutoffReference] = useState("")
 
-    async function loadRequests(page = pagination.page) {
+
+    async function loadCurrentUser() {
+        try {
+            const res = await fetch("/api/auth/me", {
+                credentials: "include",
+            })
+
+            const data = await readJsonResponse(res)
+
+            if (!res.ok) {
+                setUser(null)
+                return
+            }
+
+            setUser(data.user || data)
+        } catch (error) {
+            console.error(error)
+            setUser(null)
+        }
+    }
+
+    function userHasPermission(permission: string) {
+        if (!user) return false
+
+        const hasDirectPermission =
+            user.permissions?.includes(permission)
+
+        const hasRolePermission =
+            user.roles?.some((role: any) => {
+                if (typeof role === "string") {
+                    return role === permission
+                }
+
+                return role.name === permission
+            })
+
+        return Boolean(hasDirectPermission || hasRolePermission)
+    }
+
+    function canRespondLogisticsRequests() {
+        return userHasPermission("LOGISTICS_ANALYST")
+    }
+
+    async function loadRequests(
+        page = pagination.page,
+        tab = activeTab
+    ) {
         try {
             setLoading(true)
 
@@ -327,20 +413,24 @@ export default function LogisticsPage() {
                 params.set("search", search.trim())
             }
 
-            if (statusFilter !== "all") {
-                params.set("status", statusFilter)
-            }
-
             if (typeFilter !== "all") {
                 params.set("type", typeFilter)
             }
 
-            if (onlyPending) {
-                params.set("onlyPending", "true")
+            if (tab === "pending") {
+                params.set("status", "PENDING")
             }
 
-            if (onlyMine) {
+            if (tab === "in_review") {
+                params.set("status", "IN_REVIEW")
+            }
+
+            if (tab === "mine") {
                 params.set("onlyMine", "true")
+            }
+
+            if (tab === "responded") {
+                params.set("onlyPending", "false")
             }
 
             const res = await fetch(
@@ -355,11 +445,30 @@ export default function LogisticsPage() {
             if (!res.ok) {
                 throw new Error(
                     data?.error ||
-                        "Erro ao carregar solicitações logísticas"
+                    "Erro ao carregar solicitações logísticas"
                 )
             }
 
-            setRequests(data.data || [])
+            let nextRequests: LogisticsRequest[] = data.data || []
+
+            if (tab === "responded") {
+                nextRequests = nextRequests.filter((request) =>
+                    [
+                        "APPROVED",
+                        "REJECTED",
+                        "CANCELED",
+                    ].includes(request.status)
+                )
+            }
+
+            if (priorityFilter !== "all") {
+                nextRequests = nextRequests.filter(
+                    (request) =>
+                        request.priority === priorityFilter
+                )
+            }
+
+            setRequests(nextRequests)
             setStats(data.stats)
             setPagination(data.pagination)
         } catch (error) {
@@ -376,7 +485,7 @@ export default function LogisticsPage() {
     }
 
     useEffect(() => {
-        loadRequests(1)
+        loadRequests(1, "pending")
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -386,6 +495,11 @@ export default function LogisticsPage() {
         setCalculatedQuantity("")
         setCutoffDate("")
         setCutoffReference("")
+    }
+
+    function handleTabChange(tab: LogisticsTab) {
+        setActiveTab(tab)
+        loadRequests(1, tab)
     }
 
     async function handleAccept(request: LogisticsRequest) {
@@ -411,7 +525,7 @@ export default function LogisticsPage() {
             if (!res.ok) {
                 throw new Error(
                     data?.error ||
-                        "Erro ao assumir solicitação logística"
+                    "Erro ao assumir solicitação logística"
                 )
             }
 
@@ -485,24 +599,24 @@ export default function LogisticsPage() {
             const payload =
                 actionMode === "APPROVE"
                     ? {
-                          action: "APPROVE",
-                          responseNotes:
-                              responseNotes.trim() || null,
-                          calculatedQuantity:
-                              calculatedQuantity !== ""
-                                  ? Number(calculatedQuantity)
-                                  : null,
-                          cutoffDate: cutoffDate || null,
-                          cutoffReference:
-                              cutoffReference.trim() || null,
-                      }
+                        action: "APPROVE",
+                        responseNotes:
+                            responseNotes.trim() || null,
+                        calculatedQuantity:
+                            calculatedQuantity !== ""
+                                ? Number(calculatedQuantity)
+                                : null,
+                        cutoffDate: cutoffDate || null,
+                        cutoffReference:
+                            cutoffReference.trim() || null,
+                    }
                     : {
-                          action: "REJECT",
-                          rejectionReason:
-                              rejectionReason.trim(),
-                          responseNotes:
-                              responseNotes.trim() || null,
-                      }
+                        action: "REJECT",
+                        rejectionReason:
+                            rejectionReason.trim(),
+                        responseNotes:
+                            responseNotes.trim() || null,
+                    }
 
             const res = await fetch(
                 `/api/logistics/requests/${selectedRequest.id}`,
@@ -521,7 +635,7 @@ export default function LogisticsPage() {
             if (!res.ok) {
                 throw new Error(
                     data?.error ||
-                        "Erro ao atualizar solicitação logística"
+                    "Erro ao atualizar solicitação logística"
                 )
             }
 
@@ -550,15 +664,48 @@ export default function LogisticsPage() {
 
     function clearFilters() {
         setSearch("")
-        setStatusFilter("all")
         setTypeFilter("all")
-        setOnlyPending(true)
-        setOnlyMine(false)
+        setPriorityFilter("all")
+        setActiveTab("pending")
 
         setTimeout(() => {
-            loadRequests(1)
+            loadRequests(1, "pending")
         }, 0)
     }
+
+    const tabs: {
+        value: LogisticsTab
+        label: string
+        count?: number
+    }[] = [
+            {
+                value: "pending",
+                label: "Pendentes",
+                count: stats.pending,
+            },
+            {
+                value: "in_review",
+                label: "Em análise",
+                count: stats.inReview,
+            },
+            {
+                value: "mine",
+                label: "Minhas",
+            },
+            {
+                value: "responded",
+                label: "Respondidas",
+                count:
+                    stats.approved +
+                    stats.rejected +
+                    stats.canceled,
+            },
+            {
+                value: "all",
+                label: "Todas",
+                count: stats.total,
+            },
+        ]
 
     return (
         <ProtectedRoute permission="LOGISTICS_REQUEST_REVIEW">
@@ -583,24 +730,13 @@ export default function LogisticsPage() {
                             </h1>
 
                             <p className="text-sm text-muted-foreground">
-                                Analise, assuma e responda as
-                                solicitações logísticas abertas pelo time
-                                de Risk.
+                                Painel para assumir, responder e
+                                acompanhar solicitações logísticas do
+                                time de Risk.
                             </p>
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                            <Card>
-                                <CardHeader className="pb-2">
-                                    <CardDescription>
-                                        Total
-                                    </CardDescription>
-                                    <CardTitle>
-                                        {stats.total}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-
                             <Card>
                                 <CardHeader className="pb-2">
                                     <CardDescription>
@@ -644,19 +780,57 @@ export default function LogisticsPage() {
                                     </CardTitle>
                                 </CardHeader>
                             </Card>
+
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardDescription>
+                                        Total
+                                    </CardDescription>
+                                    <CardTitle>
+                                        {stats.total}
+                                    </CardTitle>
+                                </CardHeader>
+                            </Card>
                         </div>
 
                         <Card>
                             <CardHeader>
-                                <CardTitle>Filtros</CardTitle>
+                                <CardTitle>
+                                    Filtros e visualização
+                                </CardTitle>
                                 <CardDescription>
-                                    Filtre por RM, PN, fornecedor, status
-                                    ou tipo de solicitação.
+                                    Use as abas para alternar entre
+                                    pendências, histórico e solicitações
+                                    atribuídas a você.
                                 </CardDescription>
                             </CardHeader>
 
-                            <CardContent className="space-y-4">
-                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            <CardContent className="space-y-5">
+                                <div className="flex flex-wrap gap-2">
+                                    {tabs.map((tab) => (
+                                        <Button
+                                            key={tab.value}
+                                            type="button"
+                                            variant={
+                                                activeTab === tab.value
+                                                    ? "default"
+                                                    : "outline"
+                                            }
+                                            onClick={() =>
+                                                handleTabChange(
+                                                    tab.value
+                                                )
+                                            }
+                                        >
+                                            {tab.label}
+                                            {tab.count !== undefined
+                                                ? ` (${tab.count})`
+                                                : ""}
+                                        </Button>
+                                    ))}
+                                </div>
+
+                                <div className="grid gap-4 md:grid-cols-3">
                                     <div className="space-y-2">
                                         <Label>Busca</Label>
                                         <Input
@@ -668,41 +842,6 @@ export default function LogisticsPage() {
                                             }
                                             placeholder="RM, PN, fornecedor..."
                                         />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Status</Label>
-                                        <Select
-                                            value={statusFilter}
-                                            onValueChange={
-                                                setStatusFilter
-                                            }
-                                            disabled={onlyPending}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">
-                                                    Todos
-                                                </SelectItem>
-                                                <SelectItem value="PENDING">
-                                                    Pendente
-                                                </SelectItem>
-                                                <SelectItem value="IN_REVIEW">
-                                                    Em análise
-                                                </SelectItem>
-                                                <SelectItem value="APPROVED">
-                                                    Aprovada
-                                                </SelectItem>
-                                                <SelectItem value="REJECTED">
-                                                    Recusada
-                                                </SelectItem>
-                                                <SelectItem value="CANCELED">
-                                                    Cancelada
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
                                     </div>
 
                                     <div className="space-y-2">
@@ -731,42 +870,34 @@ export default function LogisticsPage() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label>Atalhos</Label>
-                                        <div className="flex flex-wrap gap-2">
-                                            <Button
-                                                type="button"
-                                                variant={
-                                                    onlyPending
-                                                        ? "default"
-                                                        : "outline"
-                                                }
-                                                onClick={() =>
-                                                    setOnlyPending(
-                                                        (prev) =>
-                                                            !prev
-                                                    )
-                                                }
-                                            >
-                                                Pendentes
-                                            </Button>
-
-                                            <Button
-                                                type="button"
-                                                variant={
-                                                    onlyMine
-                                                        ? "default"
-                                                        : "outline"
-                                                }
-                                                onClick={() =>
-                                                    setOnlyMine(
-                                                        (prev) =>
-                                                            !prev
-                                                    )
-                                                }
-                                            >
-                                                Minhas
-                                            </Button>
-                                        </div>
+                                        <Label>Prioridade</Label>
+                                        <Select
+                                            value={priorityFilter}
+                                            onValueChange={
+                                                setPriorityFilter
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">
+                                                    Todas
+                                                </SelectItem>
+                                                <SelectItem value="LOW">
+                                                    Baixa
+                                                </SelectItem>
+                                                <SelectItem value="MEDIUM">
+                                                    Média
+                                                </SelectItem>
+                                                <SelectItem value="HIGH">
+                                                    Alta
+                                                </SelectItem>
+                                                <SelectItem value="CRITICAL">
+                                                    Crítica
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
 
@@ -796,11 +927,11 @@ export default function LogisticsPage() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>
-                                    Solicitações logísticas
+                                    {getTabLabel(activeTab)}
                                 </CardTitle>
                                 <CardDescription>
-                                    Pendências enviadas pelo time de
-                                    Risk para análise da Logística.
+                                    Solicitações logísticas filtradas
+                                    conforme a aba selecionada.
                                 </CardDescription>
                             </CardHeader>
 
@@ -815,7 +946,7 @@ export default function LogisticsPage() {
                                     </div>
                                 ) : (
                                     <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[1100px] text-sm">
+                                        <table className="w-full min-w-[1150px] text-sm">
                                             <thead>
                                                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                                                     <th className="px-3 py-3">
@@ -861,6 +992,7 @@ export default function LogisticsPage() {
                                                                             request.code
                                                                         }
                                                                     </p>
+
                                                                     <p className="text-xs text-muted-foreground">
                                                                         Prioridade:{" "}
                                                                         {getPriorityLabel(
@@ -936,6 +1068,7 @@ export default function LogisticsPage() {
                                                                             ?.name ||
                                                                             "-"}
                                                                     </p>
+
                                                                     <p className="text-xs text-muted-foreground">
                                                                         {formatDate(
                                                                             request.requestedAt
@@ -954,7 +1087,7 @@ export default function LogisticsPage() {
                                                             <td className="px-3 py-4">
                                                                 {request.status ===
                                                                     "PENDING" ||
-                                                                request.status ===
+                                                                    request.status ===
                                                                     "IN_REVIEW"
                                                                     ? `${request.pendingDays} dia(s)`
                                                                     : "-"}
@@ -962,64 +1095,66 @@ export default function LogisticsPage() {
 
                                                             <td className="px-3 py-4">
                                                                 <div className="flex flex-wrap justify-end gap-2">
-                                                                    {request.status ===
-                                                                        "PENDING" && (
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            disabled={
-                                                                                saving
-                                                                            }
-                                                                            onClick={() =>
-                                                                                handleAccept(
-                                                                                    request
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            Assumir
-                                                                        </Button>
-                                                                    )}
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() =>
+                                                                            setDetailRequest(
+                                                                                request
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        Detalhes
+                                                                    </Button>
 
-                                                                    {(request.status ===
-                                                                        "PENDING" ||
-                                                                        request.status ===
-                                                                            "IN_REVIEW") && (
-                                                                        <>
+                                                                    {canRespondLogisticsRequests() &&
+                                                                        request.status === "PENDING" && (
                                                                             <Button
                                                                                 type="button"
                                                                                 size="sm"
-                                                                                disabled={
-                                                                                    saving
-                                                                                }
-                                                                                onClick={() =>
-                                                                                    openActionDialog(
-                                                                                        request,
-                                                                                        "APPROVE"
-                                                                                    )
-                                                                                }
+                                                                                variant="outline"
+                                                                                disabled={saving}
+                                                                                onClick={() => handleAccept(request)}
                                                                             >
-                                                                                Aprovar
+                                                                                Assumir
                                                                             </Button>
+                                                                        )}
 
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="destructive"
-                                                                                disabled={
-                                                                                    saving
-                                                                                }
-                                                                                onClick={() =>
-                                                                                    openActionDialog(
-                                                                                        request,
-                                                                                        "REJECT"
-                                                                                    )
-                                                                                }
-                                                                            >
-                                                                                Recusar
-                                                                            </Button>
-                                                                        </>
-                                                                    )}
+                                                                    {canRespondLogisticsRequests() &&
+                                                                        (request.status === "PENDING" ||
+                                                                            request.status === "IN_REVIEW") && (
+                                                                            <>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    disabled={saving}
+                                                                                    onClick={() =>
+                                                                                        openActionDialog(
+                                                                                            request,
+                                                                                            "APPROVE"
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    Aprovar
+                                                                                </Button>
+
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    variant="destructive"
+                                                                                    disabled={saving}
+                                                                                    onClick={() =>
+                                                                                        openActionDialog(
+                                                                                            request,
+                                                                                            "REJECT"
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    Recusar
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -1062,7 +1197,7 @@ export default function LogisticsPage() {
                                             disabled={
                                                 loading ||
                                                 pagination.page >=
-                                                    pagination.totalPages
+                                                pagination.totalPages
                                             }
                                             onClick={() =>
                                                 loadRequests(
@@ -1130,7 +1265,7 @@ export default function LogisticsPage() {
                                 </p>
 
                                 {selectedRequest.coverageStartDate ||
-                                selectedRequest.coverageEndDate ? (
+                                    selectedRequest.coverageEndDate ? (
                                     <p>
                                         <span className="text-muted-foreground">
                                             Cobertura:
@@ -1148,7 +1283,7 @@ export default function LogisticsPage() {
 
                             {actionMode === "APPROVE" &&
                                 selectedRequest.type ===
-                                    "BUFFER_CALCULATION" && (
+                                "BUFFER_CALCULATION" && (
                                     <div className="space-y-2">
                                         <Label>
                                             Quantidade calculada
@@ -1267,8 +1402,308 @@ export default function LogisticsPage() {
                             {saving
                                 ? "Salvando..."
                                 : actionMode === "APPROVE"
-                                  ? "Aprovar"
-                                  : "Recusar"}
+                                    ? "Aprovar"
+                                    : "Recusar"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={Boolean(detailRequest)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDetailRequest(null)
+                    }
+                }}
+            >
+                <DialogContent className="max-h-[90vh] w-[95vw] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>
+                            Detalhes da solicitação
+                        </DialogTitle>
+
+                        <DialogDescription>
+                            {detailRequest
+                                ? `${detailRequest.code} — ${getTypeLabel(detailRequest.type)}`
+                                : "Visualize os dados completos da solicitação logística."}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {detailRequest && (
+                        <div className="space-y-4 text-sm">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="rounded-lg border p-3">
+                                    <p className="mb-2 font-medium">
+                                        Dados principais
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Código:
+                                        </span>{" "}
+                                        {detailRequest.code}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Status:
+                                        </span>{" "}
+                                        {detailRequest.status}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Prioridade:
+                                        </span>{" "}
+                                        {getPriorityLabel(
+                                            detailRequest.priority
+                                        )}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Solicitado em:
+                                        </span>{" "}
+                                        {formatDate(
+                                            detailRequest.requestedAt
+                                        )}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Pendente há:
+                                        </span>{" "}
+                                        {detailRequest.status ===
+                                            "PENDING" ||
+                                            detailRequest.status ===
+                                            "IN_REVIEW"
+                                            ? `${detailRequest.pendingDays} dia(s)`
+                                            : "-"}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-lg border p-3">
+                                    <p className="mb-2 font-medium">
+                                        RM e PN
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            RM:
+                                        </span>{" "}
+                                        {detailRequest.riskEvent.code}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Fornecedor:
+                                        </span>{" "}
+                                        {
+                                            detailRequest.riskEvent
+                                                .supplier.name
+                                        }
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            PN:
+                                        </span>{" "}
+                                        {
+                                            detailRequest.riskEventPart
+                                                .partNumber.partNumber
+                                        }
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Descrição:
+                                        </span>{" "}
+                                        {detailRequest.riskEventPart
+                                            .partNumber.description ||
+                                            "-"}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <div className="rounded-lg border p-3">
+                                    <p className="mb-2 font-medium">
+                                        Solicitante
+                                    </p>
+                                    <p>
+                                        {detailRequest.requestedBy
+                                            ?.name || "-"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {detailRequest.requestedBy
+                                            ?.email || "-"}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-lg border p-3">
+                                    <p className="mb-2 font-medium">
+                                        Responsável logística
+                                    </p>
+                                    <p>
+                                        {detailRequest.assignedTo
+                                            ?.name || "-"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {detailRequest.assignedTo
+                                            ?.email || "-"}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-lg border p-3">
+                                    <p className="mb-2 font-medium">
+                                        Revisor
+                                    </p>
+                                    <p>
+                                        {detailRequest.reviewedBy
+                                            ?.name || "-"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {detailRequest.reviewedBy
+                                            ?.email || "-"}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border p-3">
+                                <p className="mb-2 font-medium">
+                                    Orientação do Risk
+                                </p>
+                                <p className="whitespace-pre-wrap">
+                                    {detailRequest.requestNotes || "-"}
+                                </p>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="rounded-lg border p-3">
+                                    <p className="mb-2 font-medium">
+                                        Buffer / cobertura
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Quantidade solicitada:
+                                        </span>{" "}
+                                        {detailRequest.requestedQuantity ??
+                                            "-"}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Quantidade calculada:
+                                        </span>{" "}
+                                        {detailRequest.calculatedQuantity ??
+                                            "-"}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Cobertura:
+                                        </span>{" "}
+                                        {formatDate(
+                                            detailRequest.coverageStartDate
+                                        )}{" "}
+                                        até{" "}
+                                        {formatDate(
+                                            detailRequest.coverageEndDate
+                                        )}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-lg border p-3">
+                                    <p className="mb-2 font-medium">
+                                        Ponto de corte
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Referência:
+                                        </span>{" "}
+                                        {detailRequest.cutoffReference ||
+                                            "-"}
+                                    </p>
+
+                                    <p>
+                                        <span className="text-muted-foreground">
+                                            Data:
+                                        </span>{" "}
+                                        {formatDate(
+                                            detailRequest.cutoffDate
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {(detailRequest.oldPartNumber ||
+                                detailRequest.newPartNumber ||
+                                detailRequest.replacementReason) && (
+                                    <div className="rounded-lg border p-3">
+                                        <p className="mb-2 font-medium">
+                                            Troca de PN
+                                        </p>
+
+                                        <p>
+                                            <span className="text-muted-foreground">
+                                                PN antigo:
+                                            </span>{" "}
+                                            {detailRequest.oldPartNumber ||
+                                                "-"}
+                                        </p>
+
+                                        <p>
+                                            <span className="text-muted-foreground">
+                                                PN novo:
+                                            </span>{" "}
+                                            {detailRequest.newPartNumber ||
+                                                "-"}
+                                        </p>
+
+                                        <p>
+                                            <span className="text-muted-foreground">
+                                                Motivo:
+                                            </span>{" "}
+                                            {detailRequest.replacementReason ||
+                                                "-"}
+                                        </p>
+                                    </div>
+                                )}
+
+                            {detailRequest.responseNotes && (
+                                <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                                    <p className="mb-2 font-medium text-green-700">
+                                        Resposta da Logística
+                                    </p>
+                                    <p className="whitespace-pre-wrap text-green-800">
+                                        {detailRequest.responseNotes}
+                                    </p>
+                                </div>
+                            )}
+
+                            {detailRequest.rejectionReason && (
+                                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                                    <p className="mb-2 font-medium text-red-700">
+                                        Motivo da recusa
+                                    </p>
+                                    <p className="whitespace-pre-wrap text-red-800">
+                                        {detailRequest.rejectionReason}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setDetailRequest(null)}
+                        >
+                            Fechar
                         </Button>
                     </DialogFooter>
                 </DialogContent>

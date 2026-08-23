@@ -168,15 +168,17 @@ export function AppSidebar({
         url: "/logistics",
         icon: IconTruck,
         permission: [
-          "LOGISTICS_REQUEST_REVIEW",
-          "USER_MANAGE",
+          "LOGISTICS_REQUEST_REVIEW"
         ],
       },
       {
         title: "Usuários",
         url: "/users",
         icon: IconUsers,
-        permission: "USER_MANAGE",
+        permission: [
+          "USER_MANAGE",
+          "RISK_VIEW"
+        ],
       },
       {
         title: "Administração",

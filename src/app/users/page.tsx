@@ -97,7 +97,7 @@ export default function UsersPage() {
   }
 
   return (
-    <ProtectedRoute permission="USER_MANAGE">
+    <ProtectedRoute permission="USER_VIEW" >
       <SidebarProvider>
         <AppSidebar variant="inset" />
 
