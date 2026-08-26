@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
+import { useAuth } from "@/contexts/AuthContext"
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { SiteHeader } from "@/components/dashboard/site-header"
@@ -310,7 +311,7 @@ async function readJsonResponse(res: Response) {
 
 export default function LogisticsPage() {
     const [requests, setRequests] = useState<LogisticsRequest[]>([])
-    const [user, setUser] = useState<CurrentUser | null>(null)
+    const { user } = useAuth()
     const [stats, setStats] =
         useState<LogisticsResponse["stats"]>({
             total: 0,
@@ -355,47 +356,21 @@ export default function LogisticsPage() {
     const [cutoffReference, setCutoffReference] = useState("")
 
 
-    async function loadCurrentUser() {
-        try {
-            const res = await fetch("/api/auth/me", {
-                credentials: "include",
-            })
+function userHasPermission(
+    requiredPermission: string
+) {
+    if (!user) return false
 
-            const data = await readJsonResponse(res)
+    return user.permissions?.includes(
+        requiredPermission
+    ) ?? false
+}
 
-            if (!res.ok) {
-                setUser(null)
-                return
-            }
-
-            setUser(data.user || data)
-        } catch (error) {
-            console.error(error)
-            setUser(null)
-        }
-    }
-
-    function userHasPermission(permission: string) {
-        if (!user) return false
-
-        const hasDirectPermission =
-            user.permissions?.includes(permission)
-
-        const hasRolePermission =
-            user.roles?.some((role: any) => {
-                if (typeof role === "string") {
-                    return role === permission
-                }
-
-                return role.name === permission
-            })
-
-        return Boolean(hasDirectPermission || hasRolePermission)
-    }
-
-    function canRespondLogisticsRequests() {
-        return userHasPermission("LOGISTICS_ANALYST")
-    }
+function canRespondLogisticsRequests() {
+    return userHasPermission(
+        "LOGISTICS_ANALYST"
+    )
+}
 
     async function loadRequests(
         page = pagination.page,
