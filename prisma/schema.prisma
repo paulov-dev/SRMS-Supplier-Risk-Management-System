@@ -129,9 +129,319 @@ enum RiskActionPlanPriority {
   CRITICAL
 }
 
+enum SnapshotWeekday {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum WeeklySnapshotEventType {
+  RISK_CREATED
+  RISK_CLOSED
+  RISK_CANCELED
+  RISK_REOPENED
+  RISK_ASSIGNED
+
+  RISK_LEVEL_CHANGED
+  RISK_LEVEL_IMPROVED
+  RISK_LEVEL_WORSENED
+
+  PART_CREATED
+  PART_STATUS_CHANGED
+
+  ACTION_PLAN_CREATED
+  ACTION_PLAN_COMPLETED
+  ACTION_PLAN_OVERDUE
+
+  LOGISTICS_REQUEST_CREATED
+  LOGISTICS_REQUEST_ACCEPTED
+  LOGISTICS_REQUEST_APPROVED
+  LOGISTICS_REQUEST_REJECTED
+  LOGISTICS_REQUEST_CANCELED
+}
+
 //////////////////////
 // SEQUENCES
 //////////////////////
+
+model WeeklyRiskStateSnapshot {
+  id String @id @default(uuid())
+
+  week  Int
+  month Int
+  year  Int
+
+  weekStartDate DateTime
+  weekEndDate   DateTime
+  snapshotDate  DateTime @default(now())
+
+  riskEventId String
+
+  code  String?
+  title String
+
+  riskLevel      RiskLevel
+  workflowStatus RiskWorkflowStatus
+
+  assignedToId String?
+  supplierId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id], onDelete: Cascade)
+
+  @@unique([riskEventId, week, year])
+  @@index([week, year])
+  @@index([riskEventId])
+  @@index([riskLevel])
+  @@index([workflowStatus])
+  @@index([assignedToId])
+  @@index([supplierId])
+}
+
+model WeeklySnapshotConfig {
+  id String @id @default(uuid())
+
+  name String @default("Configuração padrão")
+
+  isEnabled Boolean @default(true)
+
+  weekday SnapshotWeekday @default(FRIDAY)
+
+  hour   Int @default(17)
+  minute Int @default(0)
+
+  timezone String @default("America/Sao_Paulo")
+
+  allowManualRun       Boolean @default(true)
+  overwriteCurrentWeek Boolean @default(true)
+
+  lastRunAt   DateTime?
+  lastRunWeek Int?
+  lastRunYear Int?
+
+  createdById String?
+  updatedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy User? @relation("WeeklySnapshotConfigCreatedBy", fields: [createdById], references: [id])
+  updatedBy User? @relation("WeeklySnapshotConfigUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([isEnabled])
+}
+
+model WeeklySnapshot {
+  id String @id @default(uuid())
+
+  week  Int
+  month Int
+  year  Int
+
+  weekStartDate DateTime
+  weekEndDate   DateTime
+  snapshotDate  DateTime @default(now())
+
+  totalRisks    Int @default(0)
+  openRisks     Int @default(0)
+  closedRisks   Int @default(0)
+  canceledRisks Int @default(0)
+
+  redRisks    Int @default(0)
+  yellowRisks Int @default(0)
+  greenRisks  Int @default(0)
+  orangeRisks Int @default(0)
+  greyRisks   Int @default(0)
+  blueRisks   Int @default(0)
+
+  totalParts  Int @default(0)
+  redParts    Int @default(0)
+  yellowParts Int @default(0)
+  greenParts  Int @default(0)
+  orangeParts Int @default(0)
+  greyParts   Int @default(0)
+  blueParts   Int @default(0)
+
+  totalActionPlans             Int @default(0)
+  openActionPlans              Int @default(0)
+  inProgressActionPlans        Int @default(0)
+  waitingValidationActionPlans Int @default(0)
+  completedActionPlans         Int @default(0)
+  canceledActionPlans          Int @default(0)
+  overdueActionPlans           Int @default(0)
+
+  totalLogisticsRequests    Int @default(0)
+  pendingLogisticsRequests  Int @default(0)
+  inReviewLogisticsRequests Int @default(0)
+  approvedLogisticsRequests Int @default(0)
+  rejectedLogisticsRequests Int @default(0)
+  canceledLogisticsRequests Int @default(0)
+
+  risksCreatedThisWeek  Int @default(0)
+  risksClosedThisWeek   Int @default(0)
+  risksCanceledThisWeek Int @default(0)
+  risksReopenedThisWeek Int @default(0)
+
+  risksImprovedThisWeek Int @default(0)
+  risksWorsenedThisWeek Int @default(0)
+
+  summary Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([week, year])
+  @@index([month, year])
+  @@index([year])
+}
+
+model WeeklyRiskAnalystSnapshot {
+  id String @id @default(uuid())
+
+  userId String
+
+  week  Int
+  month Int
+  year  Int
+
+  weekStartDate DateTime
+  weekEndDate   DateTime
+  snapshotDate  DateTime @default(now())
+
+  assignedRisks Int @default(0)
+  openRisks     Int @default(0)
+  closedRisks   Int @default(0)
+  canceledRisks Int @default(0)
+
+  redRisks    Int @default(0)
+  yellowRisks Int @default(0)
+  greenRisks  Int @default(0)
+  orangeRisks Int @default(0)
+  greyRisks   Int @default(0)
+  blueRisks   Int @default(0)
+
+  risksCreatedThisWeek  Int @default(0)
+  risksAssignedThisWeek Int @default(0)
+  risksClosedThisWeek   Int @default(0)
+  risksCanceledThisWeek Int @default(0)
+  risksReopenedThisWeek Int @default(0)
+
+  risksImprovedThisWeek Int @default(0)
+  risksWorsenedThisWeek Int @default(0)
+
+  actionPlansTotal             Int @default(0)
+  actionPlansOpen              Int @default(0)
+  actionPlansOverdue           Int @default(0)
+  actionPlansWaitingValidation Int @default(0)
+
+  oldestOpenRiskDays Int?
+  avgResolutionDays  Float?
+
+  summary Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, week, year])
+  @@index([userId])
+  @@index([week, year])
+  @@index([month, year])
+}
+
+model WeeklyLogisticsSnapshot {
+  id String @id @default(uuid())
+
+  userId String
+
+  week  Int
+  month Int
+  year  Int
+
+  weekStartDate DateTime
+  weekEndDate   DateTime
+  snapshotDate  DateTime @default(now())
+
+  assignedRequests Int @default(0)
+  pendingRequests  Int @default(0)
+  inReviewRequests Int @default(0)
+  approvedRequests Int @default(0)
+  rejectedRequests Int @default(0)
+  canceledRequests Int @default(0)
+
+  requestsReceivedThisWeek Int @default(0)
+  requestsAcceptedThisWeek Int @default(0)
+  requestsApprovedThisWeek Int @default(0)
+  requestsRejectedThisWeek Int @default(0)
+  requestsCanceledThisWeek Int @default(0)
+
+  partsUnderLogisticsReview Int @default(0)
+  partsApprovedThisWeek     Int @default(0)
+
+  oldestPendingRequestDays Int?
+  avgReviewDays            Float?
+
+  summary Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, week, year])
+  @@index([userId])
+  @@index([week, year])
+  @@index([month, year])
+}
+
+model WeeklySnapshotEvent {
+  id String @id @default(uuid())
+
+  week  Int
+  month Int
+  year  Int
+
+  weekStartDate DateTime
+  weekEndDate   DateTime
+
+  eventType WeeklySnapshotEventType
+
+  riskEventId        String?
+  riskEventPartId    String?
+  logisticsRequestId String?
+  actionPlanId       String?
+
+  userId String?
+
+  oldValue String?
+  newValue String?
+
+  description String?
+
+  createdAt DateTime @default(now())
+
+  riskEvent        RiskEvent?        @relation(fields: [riskEventId], references: [id], onDelete: SetNull)
+  riskEventPart    RiskEventPart?    @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
+  logisticsRequest LogisticsRequest? @relation(fields: [logisticsRequestId], references: [id], onDelete: SetNull)
+  actionPlan       RiskActionPlan?   @relation(fields: [actionPlanId], references: [id], onDelete: SetNull)
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([week, year])
+  @@index([month, year])
+  @@index([eventType])
+  @@index([riskEventId])
+  @@index([riskEventPartId])
+  @@index([logisticsRequestId])
+  @@index([actionPlanId])
+  @@index([userId])
+}
 
 model RiskSequence {
   key           String   @id
@@ -170,6 +480,14 @@ model User {
   createdActionPlans   RiskActionPlan[] @relation("ActionPlanCreatedBy")
   assignedActionPlans  RiskActionPlan[] @relation("ActionPlanAssignedTo")
   validatedActionPlans RiskActionPlan[] @relation("ActionPlanValidatedBy")
+
+  createdWeeklySnapshotConfigs WeeklySnapshotConfig[] @relation("WeeklySnapshotConfigCreatedBy")
+  updatedWeeklySnapshotConfigs WeeklySnapshotConfig[] @relation("WeeklySnapshotConfigUpdatedBy")
+
+  weeklyRiskAnalystSnapshots WeeklyRiskAnalystSnapshot[]
+  weeklyLogisticsSnapshots   WeeklyLogisticsSnapshot[]
+
+  weeklySnapshotEvents WeeklySnapshotEvent[]
 
   buffersCreated LogisticsBuffer[] @relation("BufferCreator")
 
@@ -302,13 +620,15 @@ model RiskEvent {
   assignedTo User? @relation("AssignedTo", fields: [assignedToId], references: [id])
   closedBy   User? @relation("ClosedBy", fields: [closedById], references: [id])
 
-  parts             RiskEventPart[]
-  actionPlans       RiskActionPlan[]
-  comments          Comment[]
-  logistics         LogisticsRequest[]
-  statusHistory     RiskStatusHistory[]
-  partHistory       RiskEventPartHistory[]
-  actionPlanHistory RiskActionPlanHistory[]
+  parts                    RiskEventPart[]
+  actionPlans              RiskActionPlan[]
+  comments                 Comment[]
+  logistics                LogisticsRequest[]
+  statusHistory            RiskStatusHistory[]
+  partHistory              RiskEventPartHistory[]
+  actionPlanHistory        RiskActionPlanHistory[]
+  weeklySnapshotEvents     WeeklySnapshotEvent[]
+  weeklyRiskStateSnapshots WeeklyRiskStateSnapshot[]
 
   @@index([code])
   @@index([sequenceNumber])
@@ -341,12 +661,13 @@ model RiskEventPart {
 
   assignedTo User? @relation("RiskPartAssignedTo", fields: [assignedToId], references: [id])
 
-  logisticsRequests   LogisticsRequest[]
-  history             RiskEventPartHistory[]
-  actionPlans         RiskActionPlan[]
-  actionPlanHistory   RiskActionPlanHistory[]
-  assessment          RiskPartAssessment?
-  vehicleApplications RiskEventPartApplication[]
+  logisticsRequests    LogisticsRequest[]
+  history              RiskEventPartHistory[]
+  actionPlans          RiskActionPlan[]
+  actionPlanHistory    RiskActionPlanHistory[]
+  assessment           RiskPartAssessment?
+  vehicleApplications  RiskEventPartApplication[]
+  weeklySnapshotEvents WeeklySnapshotEvent[]
 
   @@unique([riskEventId, partNumberId])
   @@index([riskEventId])
@@ -412,17 +733,13 @@ model RiskActionPlan {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id], onDelete: Cascade)
-
-  riskEventPart RiskEventPart? @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
-
-  createdBy User @relation("ActionPlanCreatedBy", fields: [createdById], references: [id])
-
-  assignedTo User? @relation("ActionPlanAssignedTo", fields: [assignedToId], references: [id])
-
-  validatedBy User? @relation("ActionPlanValidatedBy", fields: [validatedById], references: [id])
-
-  history RiskActionPlanHistory[]
+  riskEvent            RiskEvent               @relation(fields: [riskEventId], references: [id], onDelete: Cascade)
+  riskEventPart        RiskEventPart?          @relation(fields: [riskEventPartId], references: [id], onDelete: SetNull)
+  createdBy            User                    @relation("ActionPlanCreatedBy", fields: [createdById], references: [id])
+  assignedTo           User?                   @relation("ActionPlanAssignedTo", fields: [assignedToId], references: [id])
+  validatedBy          User?                   @relation("ActionPlanValidatedBy", fields: [validatedById], references: [id])
+  weeklySnapshotEvents WeeklySnapshotEvent[]
+  history              RiskActionPlanHistory[]
 
   @@index([riskEventId])
   @@index([riskEventPartId])
@@ -616,16 +933,13 @@ model LogisticsRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  riskEvent RiskEvent @relation(fields: [riskEventId], references: [id], onDelete: Cascade)
-
-  riskEventPart RiskEventPart @relation(fields: [riskEventPartId], references: [id], onDelete: Cascade)
-
-  requestedBy User @relation("LogisticsRequestedBy", fields: [requestedById], references: [id])
-
-  assignedTo User? @relation("LogisticsAssignedTo", fields: [assignedToId], references: [id])
-
-  reviewedBy       User?             @relation("LogisticsReviewedBy", fields: [reviewedById], references: [id])
-  logisticsBuffers LogisticsBuffer[]
+  riskEvent            RiskEvent             @relation(fields: [riskEventId], references: [id], onDelete: Cascade)
+  riskEventPart        RiskEventPart         @relation(fields: [riskEventPartId], references: [id], onDelete: Cascade)
+  requestedBy          User                  @relation("LogisticsRequestedBy", fields: [requestedById], references: [id])
+  assignedTo           User?                 @relation("LogisticsAssignedTo", fields: [assignedToId], references: [id])
+  reviewedBy           User?                 @relation("LogisticsReviewedBy", fields: [reviewedById], references: [id])
+  logisticsBuffers     LogisticsBuffer[]
+  weeklySnapshotEvents WeeklySnapshotEvent[]
 
   @@index([riskEventId])
   @@index([riskEventPartId])

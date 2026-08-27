@@ -3,11 +3,12 @@
 import * as React from "react"
 
 import {
+  type Icon,
+  IconChartBar,
   IconDashboard,
   IconDatabase,
-  IconFileWord,
+  IconFileAnalytics,
   IconFolder,
-  IconHelp,
   IconHistory,
   IconInnerShadowTop,
   IconListDetails,
@@ -15,9 +16,9 @@ import {
   IconSearch,
   IconSettings,
   IconShieldLock,
-  IconUsers,
-  IconUserHexagon,
   IconTruck,
+  IconUserHexagon,
+  IconUsers,
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/contexts/AuthContext"
@@ -38,15 +39,40 @@ import {
 } from "@/components/ui/sidebar"
 
 type PermissionRule = string | string[]
+type RoleRule = string | string[]
+
+type RoleLike =
+  | string
+  | {
+      name?: string
+      role?: {
+        name?: string
+      }
+    }
 
 type NavItem = {
   title: string
   url: string
-  icon?: React.ComponentType<{
-    className?: string
-  }>
+  icon?: Icon
   permission?: PermissionRule
+  role?: RoleRule
   items?: NavItem[]
+}
+
+type DocumentItem = {
+  name: string
+  url: string
+  icon: Icon
+  permission?: PermissionRule
+  role?: RoleRule
+}
+
+function getRoleName(role: RoleLike) {
+  if (typeof role === "string") {
+    return role
+  }
+
+  return role.name || role.role?.name || ""
 }
 
 export function AppSidebar({
@@ -66,6 +92,29 @@ export function AppSidebar({
     return user?.permissions?.includes(permission)
   }
 
+  const hasRole = (role?: RoleRule) => {
+    if (!role) return true
+
+    const userRoles =
+      user?.roles?.map((item: RoleLike) => getRoleName(item)) || []
+
+    if (Array.isArray(role)) {
+      return role.some((item) => userRoles.includes(item))
+    }
+
+    return userRoles.includes(role)
+  }
+
+  const canSee = ({
+    permission,
+    role,
+  }: {
+    permission?: PermissionRule
+    role?: RoleRule
+  }) => {
+    return hasPermission(permission) && hasRole(role)
+  }
+
   const filterNavItems = (items: NavItem[]): NavItem[] => {
     return items
       .map((item) => {
@@ -73,7 +122,10 @@ export function AppSidebar({
           ? filterNavItems(item.items)
           : undefined
 
-        const canSeeItem = hasPermission(item.permission)
+        const canSeeItem = canSee({
+          permission: item.permission,
+          role: item.role,
+        })
 
         const hasVisibleChildren =
           filteredChildren && filteredChildren.length > 0
@@ -88,6 +140,17 @@ export function AppSidebar({
         }
       })
       .filter(Boolean) as NavItem[]
+  }
+
+  const filterDocuments = (
+    items: DocumentItem[]
+  ): DocumentItem[] => {
+    return items.filter((item) =>
+      canSee({
+        permission: item.permission,
+        role: item.role,
+      })
+    )
   }
 
   const data = {
@@ -167,18 +230,13 @@ export function AppSidebar({
         title: "Logística",
         url: "/logistics",
         icon: IconTruck,
-        permission: [
-          "LOGISTICS_REQUEST_REVIEW"
-        ],
+        permission: ["LOGISTICS_REQUEST_REVIEW"],
       },
       {
         title: "Usuários",
         url: "/users",
         icon: IconUsers,
-        permission: [
-          "USER_MANAGE",
-          "RISK_VIEW"
-        ],
+        permission: ["USER_MANAGE", "RISK_VIEW"],
       },
       {
         title: "Administração",
@@ -204,16 +262,6 @@ export function AppSidebar({
 
     navSecondary: [
       {
-        title: "Configurações",
-        url: "#",
-        icon: IconSettings,
-      },
-      {
-        title: "Ajuda",
-        url: "#",
-        icon: IconHelp,
-      },
-      {
         title: "Buscar RM",
         url: "/rms",
         icon: IconSearch,
@@ -222,24 +270,22 @@ export function AppSidebar({
 
     documents: [
       {
-        name: "Relatórios SRMS",
-        url: "#",
-        icon: IconReport,
+        name: "Análise semanal",
+        url: "/analytics/weekly",
+        icon: IconChartBar,
+        permission: ["ANALYTICS_VIEW", "DASHBOARD_VIEW", "USER_MANAGE"],
       },
       {
-        name: "Base de dados",
-        url: "#",
-        icon: IconDatabase,
-      },
-      {
-        name: "Procedimentos",
-        url: "#",
-        icon: IconFileWord,
-      },
-    ],
+        name: "Config de snapshot",
+        url: "/settings/weekly-snapshot",
+        icon: IconSettings,
+        role: "RISK_MANAGER",
+      }
+    ] satisfies DocumentItem[],
   }
 
   const filteredNavMain = filterNavItems(data.navMain)
+  const filteredDocuments = filterDocuments(data.documents)
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -276,7 +322,7 @@ export function AppSidebar({
       <SidebarContent>
         <NavMain items={filteredNavMain} />
 
-        <NavDocuments items={data.documents} />
+        <NavDocuments items={filteredDocuments} />
 
         <NavSecondary
           items={data.navSecondary}
