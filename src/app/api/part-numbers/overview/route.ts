@@ -52,16 +52,46 @@ function uniqueById<T extends { id: string }>(items: T[]) {
 
 function isOverdueAction(plan: {
     dueDate: Date | null
-    isCompleted: boolean
+    status:
+    | "OPEN"
+    | "IN_PROGRESS"
+    | "WAITING_VALIDATION"
+    | "COMPLETED"
+    | "CANCELED"
 }) {
-    if (!plan.dueDate) return false
-    if (plan.isCompleted) return false
+
+    if (!plan.dueDate) {
+        return false
+    }
+
+
+    if (
+        plan.status === "COMPLETED" ||
+        plan.status === "CANCELED"
+    ) {
+        return false
+    }
+
 
     const today = new Date()
-    today.setHours(0, 0, 0, 0)
+
+    today.setHours(
+        0,
+        0,
+        0,
+        0
+    )
+
 
     const dueDate = new Date(plan.dueDate)
-    dueDate.setHours(0, 0, 0, 0)
+
+    dueDate.setHours(
+        0,
+        0,
+        0,
+        0
+    )
+
 
     return dueDate < today
 }
@@ -344,11 +374,14 @@ export async function GET(req: Request) {
             )
 
             const openActionPlans = allActionPlans.filter(
-                (plan) => !plan.isCompleted
+                (plan) =>
+                    plan.status !== "COMPLETED" &&
+                    plan.status !== "CANCELED"
             )
 
             const completedActionPlans = allActionPlans.filter(
-                (plan) => plan.isCompleted
+                (plan) =>
+                    plan.status === "COMPLETED"
             )
 
             const overdueActionPlans =
