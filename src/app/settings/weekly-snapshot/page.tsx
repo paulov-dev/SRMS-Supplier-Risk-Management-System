@@ -159,6 +159,140 @@ function formatHourMinute(hour: number, minute: number) {
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
 }
 
+function normalizeGenerateResponse(data: any): SnapshotGenerateResponse {
+    const snapshot = data?.snapshot || {}
+
+    return {
+        message:
+            data?.message ||
+            "Snapshot semanal gerado com sucesso",
+
+        comparisonMessage:
+            data?.comparisonMessage || undefined,
+
+        comparison:
+            data?.comparison || undefined,
+
+        week: Number(data?.week ?? snapshot?.week ?? 0),
+
+        month: Number(data?.month ?? snapshot?.month ?? 0),
+
+        year: Number(data?.year ?? snapshot?.year ?? 0),
+
+        weekStartDate:
+            data?.weekStartDate ||
+            snapshot?.weekStartDate ||
+            "",
+
+        weekEndDate:
+            data?.weekEndDate ||
+            snapshot?.weekEndDate ||
+            "",
+
+        overwritten: Boolean(data?.overwritten ?? true),
+
+        eventsCreated: Number(data?.eventsCreated ?? 0),
+
+        riskAnalystsProcessed: Number(
+            data?.riskAnalystsProcessed ?? 0
+        ),
+
+        logisticsUsersProcessed: Number(
+            data?.logisticsUsersProcessed ?? 0
+        ),
+    }
+}
+
+function LastGeneratedCard({
+    lastGenerated,
+}: {
+    lastGenerated: SnapshotGenerateResponse
+}) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    Último snapshot gerado
+                </CardTitle>
+
+                <CardDescription>
+                    Resultado da execução manual mais recente.
+                </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Semana
+                        </p>
+
+                        <p className="mt-1 font-medium">
+                            {lastGenerated.week && lastGenerated.year
+                                ? `CW${lastGenerated.week} / ${lastGenerated.year}`
+                                : "Semana não informada"}
+                        </p>
+
+                        <p className="text-xs text-muted-foreground">
+                            {formatDate(lastGenerated.weekStartDate)} até{" "}
+                            {formatDate(lastGenerated.weekEndDate)}
+                        </p>
+                    </div>
+
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Eventos criados
+                        </p>
+
+                        <p className="mt-1 text-2xl font-bold">
+                            {lastGenerated.eventsCreated}
+                        </p>
+                    </div>
+
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Analistas processados
+                        </p>
+
+                        <p className="mt-1 text-2xl font-bold">
+                            {lastGenerated.riskAnalystsProcessed}
+                        </p>
+                    </div>
+
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Logística processada
+                        </p>
+
+                        <p className="mt-1 text-2xl font-bold">
+                            {lastGenerated.logisticsUsersProcessed}
+                        </p>
+                    </div>
+                </div>
+
+                {lastGenerated.comparisonMessage && (
+                    <div className="mt-4 rounded-lg border bg-muted/40 p-4 text-sm">
+                        <p className="font-medium">
+                            Comparação com semana anterior
+                        </p>
+
+                        <p className="mt-1 text-muted-foreground">
+                            {lastGenerated.comparisonMessage}
+                        </p>
+                    </div>
+                )}
+
+                {lastGenerated.overwritten && (
+                    <div className="mt-4 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+                        Se já existia snapshot para esta semana, os dados foram sobrescritos.
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
 export default function WeeklySnapshotSettingsPage() {
     const [config, setConfig] =
         useState<WeeklySnapshotConfig | null>(null)
@@ -190,7 +324,7 @@ export default function WeeklySnapshotSettingsPage() {
             if (!res.ok) {
                 throw new Error(
                     data.error ||
-                    "Erro ao buscar configuração de snapshot"
+                        "Erro ao buscar configuração de snapshot"
                 )
             }
 
@@ -251,7 +385,7 @@ export default function WeeklySnapshotSettingsPage() {
             if (!res.ok) {
                 throw new Error(
                     data.error ||
-                    "Erro ao salvar configuração de snapshot"
+                        "Erro ao salvar configuração de snapshot"
                 )
             }
 
@@ -301,11 +435,11 @@ export default function WeeklySnapshotSettingsPage() {
             if (!res.ok) {
                 throw new Error(
                     data.error ||
-                    "Erro ao gerar snapshot semanal"
+                        "Erro ao gerar snapshot semanal"
                 )
             }
 
-            setLastGenerated(data)
+            setLastGenerated(normalizeGenerateResponse(data))
 
             toast.success("Snapshot semanal gerado com sucesso")
 
@@ -699,6 +833,7 @@ export default function WeeklySnapshotSettingsPage() {
                                     {!config.allowManualRun && (
                                         <div className="flex items-start gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm">
                                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+
                                             <p>
                                                 A execução manual está desabilitada nesta configuração.
                                             </p>
@@ -708,86 +843,11 @@ export default function WeeklySnapshotSettingsPage() {
                             </Card>
                         </div>
 
-                        {lastGenerated && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                        Último snapshot gerado
-                                    </CardTitle>
-
-                                    <CardDescription>
-                                        Resultado da execução manual mais recente.
-                                    </CardDescription>
-                                </CardHeader>
-
-                                <CardContent>
-                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm text-muted-foreground">
-                                                Semana
-                                            </p>
-
-                                            <p className="mt-1 font-medium">
-                                                CW{lastGenerated.week} / {lastGenerated.year}
-                                            </p>
-
-                                            <p className="text-xs text-muted-foreground">
-                                                {formatDate(lastGenerated.weekStartDate)} até {formatDate(lastGenerated.weekEndDate)}
-                                            </p>
-                                        </div>
-
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm text-muted-foreground">
-                                                Eventos criados
-                                            </p>
-
-                                            <p className="mt-1 text-2xl font-bold">
-                                                {lastGenerated.eventsCreated}
-                                            </p>
-                                        </div>
-
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm text-muted-foreground">
-                                                Analistas processados
-                                            </p>
-
-                                            <p className="mt-1 text-2xl font-bold">
-                                                {lastGenerated.riskAnalystsProcessed}
-                                            </p>
-                                        </div>
-
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm text-muted-foreground">
-                                                Logística processada
-                                            </p>
-
-                                            <p className="mt-1 text-2xl font-bold">
-                                                {lastGenerated.logisticsUsersProcessed}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {lastGenerated.comparisonMessage && (
-                                        <div className="mt-4 rounded-lg border bg-muted/40 p-4 text-sm">
-                                            <p className="font-medium">
-                                                Comparação com semana anterior
-                                            </p>
-
-                                            <p className="mt-1 text-muted-foreground">
-                                                {lastGenerated.comparisonMessage}
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {lastGenerated.overwritten && (
-                                        <div className="mt-4 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
-                                            Se já existia snapshot para esta semana, os dados foram sobrescritos.
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
+                        {lastGenerated ? (
+                            <LastGeneratedCard
+                                lastGenerated={lastGenerated}
+                            />
+                        ) : null}
                     </main>
                 </SidebarInset>
             </SidebarProvider>

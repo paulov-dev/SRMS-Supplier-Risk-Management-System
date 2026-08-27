@@ -14,16 +14,27 @@ function getPermissions(user: any): string[] {
     return Array.from(new Set<string>(permissions))
 }
 
+function getRoles(user: any): string[] {
+    const roles =
+        user.roles?.map((ur: any) =>
+            String(ur.role?.name || ur.name || "")
+        ) || []
+
+    return Array.from(new Set<string>(roles))
+}
+
 function canViewWeeklySnapshots(user: any) {
     const permissions = getPermissions(user)
+    const roles = getRoles(user)
 
     return (
         permissions.includes("USER_MANAGE") ||
         permissions.includes("DASHBOARD_VIEW") ||
         permissions.includes("ANALYTICS_VIEW") ||
-        user.roles?.some((ur: any) =>
-            ["ADMIN", "SUPER_ADMIN"].includes(ur.role.name)
-        )
+        permissions.includes("RISK_VIEW") ||
+        roles.includes("ADMIN") ||
+        roles.includes("SUPER_ADMIN") ||
+        roles.includes("RISK_MANAGER")
     )
 }
 
