@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 
+import { WeeklyForecastCard } from "@/components/analytics/weekly-forecast-card"
+
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { SiteHeader } from "@/components/dashboard/site-header"
 import {
@@ -2494,6 +2496,15 @@ export default function WeeklyAnalyticsPage() {
                                         <ExecutiveStatusCard
                                             current={latestSnapshot}
                                             previous={previousSnapshot}
+                                        />
+
+                                        <WeeklyForecastCard
+                                            snapshots={history}
+                                            current={latestSnapshot}
+                                        />
+
+                                        <CurrentRiskTeamStateCard
+                                            state={data.teamCurrentState}
                                         />
 
                                         <CurrentRiskTeamStateCard
