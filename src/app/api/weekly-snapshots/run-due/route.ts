@@ -1,121 +1,279 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { SnapshotWeekday } from "@prisma/client"
 
 import { prisma } from "@/app/api/lib/prisma"
-import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
-import { getRequestIp } from "@/app/api/lib/request-ip"
-import {
-    generateWeeklySnapshot,
-    getWeekInfo,
-} from "@/app/api/weekly-snapshots/lib/generateWeeklySnapshot"
+import { generateWeeklySnapshot } from "@/app/api/weekly-snapshots/lib/generateWeeklySnapshot"
 
-type WeekdayName =
-    | "SUNDAY"
-    | "MONDAY"
-    | "TUESDAY"
-    | "WEDNESDAY"
-    | "THURSDAY"
-    | "FRIDAY"
-    | "SATURDAY"
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
-const weekdayMap: Record<string, WeekdayName> = {
-    Sun: "SUNDAY",
-    Mon: "MONDAY",
-    Tue: "TUESDAY",
-    Wed: "WEDNESDAY",
-    Thu: "THURSDAY",
-    Fri: "FRIDAY",
-    Sat: "SATURDAY",
+type CronValidationResult =
+    | {
+          ok: true
+      }
+    | {
+          ok: false
+          status: number
+          message: string
+      }
+
+type ZonedNow = {
+    year: number
+    month: number
+    day: number
+    hour: number
+    minute: number
+    weekday: SnapshotWeekday
+    isoWeek: number
+    isoYear: number
+    formatted: string
 }
 
-function getPermissions(user: any): string[] {
-    const permissions =
-        user.roles?.flatMap((ur: any) =>
-            ur.role.permissions.map((rp: any) =>
-                String(rp.permission.name)
-            )
-        ) || []
+function getTokenFromRequest(req: Request) {
+    const authorization = req.headers.get("authorization")
 
-    return Array.from(new Set<string>(permissions))
+    if (!authorization) {
+        return null
+    }
+
+    const match = authorization.match(/^Bearer\s+(.+)$/i)
+
+    if (!match) {
+        return null
+    }
+
+    return match[1]?.trim() || null
 }
 
-function getRoles(user: any): string[] {
-    const roles =
-        user.roles?.map((ur: any) =>
-            String(ur.role?.name || ur.name || "")
-        ) || []
+function validateCronSecret(req: Request): CronValidationResult {
+    const expectedSecret =
+        process.env.WEEKLY_SNAPSHOT_CRON_SECRET
 
-    return Array.from(new Set<string>(roles))
+    if (!expectedSecret) {
+        return {
+            ok: false,
+            status: 500,
+            message:
+                "Variável WEEKLY_SNAPSHOT_CRON_SECRET não configurada no ambiente.",
+        }
+    }
+
+    const receivedToken = getTokenFromRequest(req)
+
+    if (
+        !receivedToken ||
+        receivedToken !== expectedSecret
+    ) {
+        return {
+            ok: false,
+            status: 401,
+            message: "Não autorizado.",
+        }
+    }
+
+    return {
+        ok: true,
+    }
 }
 
-function canRunDue(user: any) {
-    const permissions = getPermissions(user)
-    const roles = getRoles(user)
+function mapWeekday(value: string): SnapshotWeekday {
+    const normalized = value.toLowerCase()
+
+    if (normalized.includes("sunday")) {
+        return SnapshotWeekday.SUNDAY
+    }
+
+    if (normalized.includes("monday")) {
+        return SnapshotWeekday.MONDAY
+    }
+
+    if (normalized.includes("tuesday")) {
+        return SnapshotWeekday.TUESDAY
+    }
+
+    if (normalized.includes("wednesday")) {
+        return SnapshotWeekday.WEDNESDAY
+    }
+
+    if (normalized.includes("thursday")) {
+        return SnapshotWeekday.THURSDAY
+    }
+
+    if (normalized.includes("friday")) {
+        return SnapshotWeekday.FRIDAY
+    }
+
+    return SnapshotWeekday.SATURDAY
+}
+
+function getIsoWeekInfo(
+    year: number,
+    month: number,
+    day: number
+) {
+    const date = new Date(
+        Date.UTC(
+            year,
+            month - 1,
+            day
+        )
+    )
+
+    const dayOfWeek =
+        date.getUTCDay() === 0
+            ? 7
+            : date.getUTCDay()
+
+    date.setUTCDate(
+        date.getUTCDate() + 4 - dayOfWeek
+    )
+
+    const isoYear = date.getUTCFullYear()
+
+    const yearStart = new Date(
+        Date.UTC(
+            isoYear,
+            0,
+            1
+        )
+    )
+
+    const isoWeek = Math.ceil(
+        ((date.getTime() - yearStart.getTime()) /
+            86400000 +
+            1) /
+            7
+    )
+
+    return {
+        isoWeek,
+        isoYear,
+    }
+}
+
+function getZonedNow(timezone: string): ZonedNow {
+    const formatter = new Intl.DateTimeFormat(
+        "en-US",
+        {
+            timeZone: timezone,
+            weekday: "long",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+        }
+    )
+
+    const parts =
+        formatter.formatToParts(new Date())
+
+    const getPart = (type: string) =>
+        parts.find((part) => part.type === type)
+            ?.value || ""
+
+    const year = Number(getPart("year"))
+    const month = Number(getPart("month"))
+    const day = Number(getPart("day"))
+    const hour = Number(getPart("hour"))
+    const minute = Number(getPart("minute"))
+
+    const weekday = mapWeekday(
+        getPart("weekday")
+    )
+
+    const { isoWeek, isoYear } =
+        getIsoWeekInfo(
+            year,
+            month,
+            day
+        )
+
+    return {
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        weekday,
+        isoWeek,
+        isoYear,
+        formatted: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${timezone}`,
+    }
+}
+
+function hasReachedScheduledTime(params: {
+    currentHour: number
+    currentMinute: number
+    scheduledHour: number
+    scheduledMinute: number
+}) {
+    const currentTotalMinutes =
+        params.currentHour * 60 +
+        params.currentMinute
+
+    const scheduledTotalMinutes =
+        params.scheduledHour * 60 +
+        params.scheduledMinute
 
     return (
-        permissions.includes("USER_MANAGE") ||
-        roles.includes("RISK_MANAGER")
+        currentTotalMinutes >=
+        scheduledTotalMinutes
     )
 }
 
-function getDateTimeParts(timezone: string) {
-    const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        weekday: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-    }).formatToParts(new Date())
+async function getFallbackTriggeredById() {
+    const fallbackUser =
+        await prisma.user.findFirst({
+            where: {
+                isActive: true,
+                roles: {
+                    some: {
+                        role: {
+                            permissions: {
+                                some: {
+                                    permission: {
+                                        name: "USER_MANAGE",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            select: {
+                id: true,
+            },
+        })
 
-    const weekdayShort =
-        parts.find((part) => part.type === "weekday")?.value || "Mon"
-
-    const hour =
-        Number(parts.find((part) => part.type === "hour")?.value || 0)
-
-    const minute =
-        Number(parts.find((part) => part.type === "minute")?.value || 0)
-
-    return {
-        weekday: weekdayMap[weekdayShort] || "MONDAY",
-        hour,
-        minute,
-    }
+    return fallbackUser?.id || null
 }
 
-function isConfiguredTimeDue({
-    currentWeekday,
-    currentHour,
-    currentMinute,
-    configuredWeekday,
-    configuredHour,
-    configuredMinute,
-}: {
-    currentWeekday: string
-    currentHour: number
-    currentMinute: number
-    configuredWeekday: string
-    configuredHour: number
-    configuredMinute: number
-}) {
-    if (currentWeekday !== configuredWeekday) {
-        return false
-    }
-
-    const currentTotalMinutes =
-        currentHour * 60 + currentMinute
-
-    const configuredTotalMinutes =
-        configuredHour * 60 + configuredMinute
-
-    return currentTotalMinutes >= configuredTotalMinutes
-}
-
-export async function POST(req: NextRequest) {
+async function handleRunDue(req: Request) {
     try {
+        const secretValidation =
+            validateCronSecret(req)
+
+        if (!secretValidation.ok) {
+            return NextResponse.json(
+                {
+                    ran: false,
+                    error: secretValidation.message,
+                },
+                {
+                    status: secretValidation.status,
+                }
+            )
+        }
+
         const config =
             await prisma.weeklySnapshotConfig.findFirst({
+                where: {
+                    isEnabled: true,
+                },
                 orderBy: {
-                    createdAt: "asc",
+                    createdAt: "desc",
                 },
             })
 
@@ -123,127 +281,209 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 ran: false,
                 reason:
-                    "Nenhuma configuração de snapshot encontrada.",
+                    "Nenhuma configuração ativa de snapshot semanal foi encontrada.",
             })
         }
 
-        if (!config.isEnabled) {
+        const timezone =
+            config.timezone ||
+            "America/Sao_Paulo"
+
+        const now = getZonedNow(timezone)
+
+        const scheduledHour = Number(config.hour)
+        const scheduledMinute = Number(config.minute)
+
+        if (now.weekday !== config.weekday) {
             return NextResponse.json({
                 ran: false,
                 reason:
-                    "Snapshot automático está desabilitado.",
+                    "Hoje não é o dia configurado para execução do snapshot.",
+                now,
+                schedule: {
+                    weekday: config.weekday,
+                    hour: scheduledHour,
+                    minute: scheduledMinute,
+                    timezone,
+                },
             })
         }
 
-        const cronSecret = process.env.WEEKLY_SNAPSHOT_CRON_SECRET
-        const authorization = req.headers.get("authorization")
+        const reachedScheduledTime =
+            hasReachedScheduledTime({
+                currentHour: now.hour,
+                currentMinute: now.minute,
+                scheduledHour,
+                scheduledMinute,
+            })
 
-        const isCronAuthorized =
-            Boolean(cronSecret) &&
-            authorization === `Bearer ${cronSecret}`
-
-        let triggeredById = config.updatedById || config.createdById
-
-        if (!isCronAuthorized) {
-            const currentUser = await getUserFromRequest()
-
-            if (!currentUser) {
-                return NextResponse.json(
-                    { error: "Não autenticado" },
-                    { status: 401 }
-                )
-            }
-
-            if (!canRunDue(currentUser)) {
-                return NextResponse.json(
-                    {
-                        error:
-                            "Somente RISK_MANAGER ou USER_MANAGE pode executar verificação de snapshot.",
-                    },
-                    { status: 403 }
-                )
-            }
-
-            triggeredById = currentUser.id
+        if (!reachedScheduledTime) {
+            return NextResponse.json({
+                ran: false,
+                reason:
+                    "Ainda não chegou o horário configurado para execução do snapshot.",
+                now,
+                schedule: {
+                    weekday: config.weekday,
+                    hour: scheduledHour,
+                    minute: scheduledMinute,
+                    timezone,
+                },
+            })
         }
+
+        const alreadyRanThisWeek =
+            config.lastRunWeek === now.isoWeek &&
+            config.lastRunYear === now.isoYear
+
+        if (alreadyRanThisWeek) {
+            return NextResponse.json({
+                ran: false,
+                reason:
+                    "Snapshot automático desta semana já foi executado.",
+                week: now.isoWeek,
+                year: now.isoYear,
+                lastRunAt: config.lastRunAt,
+            })
+        }
+
+        const existingSnapshot =
+            await prisma.weeklySnapshot.findFirst({
+                where: {
+                    week: now.isoWeek,
+                    year: now.isoYear,
+                },
+                select: {
+                    id: true,
+                    week: true,
+                    year: true,
+                    createdAt: true,
+                },
+            })
+
+        if (
+            existingSnapshot &&
+            !config.overwriteCurrentWeek
+        ) {
+            await prisma.weeklySnapshotConfig.update({
+                where: {
+                    id: config.id,
+                },
+                data: {
+                    lastRunAt: new Date(),
+                    lastRunWeek: now.isoWeek,
+                    lastRunYear: now.isoYear,
+                },
+            })
+
+            return NextResponse.json({
+                ran: false,
+                reason:
+                    "Snapshot desta semana já existe. Como overwriteCurrentWeek está desativado, a execução automática foi ignorada.",
+                week: now.isoWeek,
+                year: now.isoYear,
+                existingSnapshotId:
+                    existingSnapshot.id,
+            })
+        }
+
+        const fallbackTriggeredById =
+            await getFallbackTriggeredById()
+
+        const triggeredById =
+            config.updatedById ??
+            config.createdById ??
+            fallbackTriggeredById
 
         if (!triggeredById) {
             return NextResponse.json(
                 {
                     ran: false,
-                    reason:
-                        "Não foi possível identificar usuário responsável pela execução.",
+                    error:
+                        "Não foi possível identificar um usuário responsável para executar o snapshot automático.",
+                    details:
+                        "A configuração não possui updatedById/createdById e nenhum usuário ativo com USER_MANAGE foi encontrado.",
                 },
-                { status: 400 }
+                {
+                    status: 500,
+                }
             )
         }
 
-        const currentParts = getDateTimeParts(config.timezone)
-
-        const due = isConfiguredTimeDue({
-            currentWeekday: currentParts.weekday,
-            currentHour: currentParts.hour,
-            currentMinute: currentParts.minute,
-            configuredWeekday: config.weekday,
-            configuredHour: config.hour,
-            configuredMinute: config.minute,
-        })
-
-        if (!due) {
-            return NextResponse.json({
-                ran: false,
-                reason:
-                    "Ainda não está no dia/horário configurado para o snapshot.",
-                configured: {
-                    weekday: config.weekday,
-                    hour: config.hour,
-                    minute: config.minute,
-                    timezone: config.timezone,
-                },
-                current: currentParts,
+        const result =
+            await generateWeeklySnapshot({
+                mode: "AUTOMATIC",
+                triggeredById,
             })
-        }
 
-        const { week, year } = getWeekInfo(new Date())
+        const resultData = result as any
 
-        if (
-            config.lastRunWeek === week &&
-            config.lastRunYear === year
-        ) {
-            return NextResponse.json({
-                ran: false,
-                reason:
-                    "O snapshot automático desta semana já foi executado.",
-                week,
-                year,
-                lastRunAt: config.lastRunAt,
-            })
-        }
-
-        const result = await generateWeeklySnapshot({
-            triggeredById,
-            ipAddress: getRequestIp(req),
-            mode: "AUTOMATIC",
-            enforceManualAllowed: false,
+        await prisma.weeklySnapshotConfig.update({
+            where: {
+                id: config.id,
+            },
+            data: {
+                lastRunAt: new Date(),
+                lastRunWeek:
+                    resultData.week || now.isoWeek,
+                lastRunYear:
+                    resultData.year || now.isoYear,
+            },
         })
 
         return NextResponse.json({
             ran: true,
             reason:
                 "Snapshot automático executado com sucesso.",
-            ...result,
+            mode: "AUTOMATIC",
+            triggeredById,
+            week: resultData.week || now.isoWeek,
+            month: resultData.month,
+            year: resultData.year || now.isoYear,
+            weekStartDate:
+                resultData.weekStartDate,
+            weekEndDate:
+                resultData.weekEndDate,
+            overwritten:
+                resultData.overwritten ?? false,
+            eventsCreated:
+                resultData.eventsCreated ?? 0,
+            riskAnalystsProcessed:
+                resultData.riskAnalystsProcessed ?? 0,
+            logisticsUsersProcessed:
+                resultData.logisticsUsersProcessed ?? 0,
+            comparison:
+                resultData.comparison ?? null,
+            snapshotId:
+                resultData.snapshot?.id ?? null,
         })
     } catch (error) {
-        console.error(error)
+        console.error(
+            "ERRO AO EXECUTAR SNAPSHOT AUTOMÁTICO:",
+            error
+        )
 
         return NextResponse.json(
             {
+                ran: false,
                 error:
+                    "Erro ao executar snapshot automático.",
+                details:
                     error instanceof Error
                         ? error.message
-                        : "Erro ao executar snapshot automático",
+                        : String(error),
             },
-            { status: 500 }
+            {
+                status: 500,
+            }
         )
     }
+}
+
+export async function POST(req: Request) {
+    return handleRunDue(req)
+}
+
+export async function GET(req: Request) {
+    return handleRunDue(req)
 }

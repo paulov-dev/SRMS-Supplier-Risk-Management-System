@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Toaster } from "sonner"
 import { Geist, Geist_Mono, Inter } from "next/font/google"
 import "./styles/globals.css"
 
@@ -58,6 +59,13 @@ export default function RootLayout({
               {children}
             </AuthProvider>
           </TooltipProvider>
+
+          <Toaster
+            richColors
+            closeButton
+            position="top-right"
+            theme="dark"
+          />
         </ThemeProvider>
       </body>
     </html>
