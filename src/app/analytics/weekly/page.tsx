@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 
 import { WeeklyForecastCard } from "@/components/analytics/weekly-forecast-card"
+import { WeeklyBacktestCard } from "@/components/analytics/weekly-backtest-card"
 
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { SiteHeader } from "@/components/dashboard/site-header"
@@ -2503,8 +2504,9 @@ export default function WeeklyAnalyticsPage() {
                                             current={latestSnapshot}
                                         />
 
-                                        <CurrentRiskTeamStateCard
-                                            state={data.teamCurrentState}
+                                        <WeeklyBacktestCard
+                                            snapshots={history}
+                                            current={latestSnapshot}
                                         />
 
                                         <CurrentRiskTeamStateCard
