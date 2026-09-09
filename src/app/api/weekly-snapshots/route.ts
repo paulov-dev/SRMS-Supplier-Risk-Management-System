@@ -142,7 +142,6 @@ function buildCurrentRiskTeamState(users: any[]) {
 function formatSnapshot(snapshot: any) {
     return {
         id: snapshot.id,
-
         week: snapshot.week,
         month: snapshot.month,
         year: snapshot.year,
@@ -181,33 +180,20 @@ function formatSnapshot(snapshot: any) {
         overdueActionPlans: snapshot.overdueActionPlans,
 
         totalLogisticsRequests: snapshot.totalLogisticsRequests,
-        pendingLogisticsRequests:
-            snapshot.pendingLogisticsRequests,
-        inReviewLogisticsRequests:
-            snapshot.inReviewLogisticsRequests,
-        approvedLogisticsRequests:
-            snapshot.approvedLogisticsRequests,
-        rejectedLogisticsRequests:
-            snapshot.rejectedLogisticsRequests,
-        canceledLogisticsRequests:
-            snapshot.canceledLogisticsRequests,
+        pendingLogisticsRequests: snapshot.pendingLogisticsRequests,
+        inReviewLogisticsRequests: snapshot.inReviewLogisticsRequests,
+        approvedLogisticsRequests: snapshot.approvedLogisticsRequests,
+        rejectedLogisticsRequests: snapshot.rejectedLogisticsRequests,
+        canceledLogisticsRequests: snapshot.canceledLogisticsRequests,
 
-        risksCreatedThisWeek:
-            snapshot.risksCreatedThisWeek,
-        risksClosedThisWeek:
-            snapshot.risksClosedThisWeek,
-        risksCanceledThisWeek:
-            snapshot.risksCanceledThisWeek,
-        risksReopenedThisWeek:
-            snapshot.risksReopenedThisWeek,
-
-        risksImprovedThisWeek:
-            snapshot.risksImprovedThisWeek,
-        risksWorsenedThisWeek:
-            snapshot.risksWorsenedThisWeek,
+        risksCreatedThisWeek: snapshot.risksCreatedThisWeek,
+        risksClosedThisWeek: snapshot.risksClosedThisWeek,
+        risksCanceledThisWeek: snapshot.risksCanceledThisWeek,
+        risksReopenedThisWeek: snapshot.risksReopenedThisWeek,
+        risksImprovedThisWeek: snapshot.risksImprovedThisWeek,
+        risksWorsenedThisWeek: snapshot.risksWorsenedThisWeek,
 
         summary: snapshot.summary,
-
         createdAt: snapshot.createdAt,
         updatedAt: snapshot.updatedAt,
     }
@@ -216,7 +202,6 @@ function formatSnapshot(snapshot: any) {
 function formatRiskAnalystSnapshot(snapshot: any) {
     return {
         id: snapshot.id,
-
         userId: snapshot.userId,
         user: snapshot.user
             ? {
@@ -247,21 +232,13 @@ function formatRiskAnalystSnapshot(snapshot: any) {
         greyRisks: snapshot.greyRisks,
         blueRisks: snapshot.blueRisks,
 
-        risksCreatedThisWeek:
-            snapshot.risksCreatedThisWeek,
-        risksAssignedThisWeek:
-            snapshot.risksAssignedThisWeek,
-        risksClosedThisWeek:
-            snapshot.risksClosedThisWeek,
-        risksCanceledThisWeek:
-            snapshot.risksCanceledThisWeek,
-        risksReopenedThisWeek:
-            snapshot.risksReopenedThisWeek,
-
-        risksImprovedThisWeek:
-            snapshot.risksImprovedThisWeek,
-        risksWorsenedThisWeek:
-            snapshot.risksWorsenedThisWeek,
+        risksCreatedThisWeek: snapshot.risksCreatedThisWeek,
+        risksAssignedThisWeek: snapshot.risksAssignedThisWeek,
+        risksClosedThisWeek: snapshot.risksClosedThisWeek,
+        risksCanceledThisWeek: snapshot.risksCanceledThisWeek,
+        risksReopenedThisWeek: snapshot.risksReopenedThisWeek,
+        risksImprovedThisWeek: snapshot.risksImprovedThisWeek,
+        risksWorsenedThisWeek: snapshot.risksWorsenedThisWeek,
 
         actionPlansTotal: snapshot.actionPlansTotal,
         actionPlansOpen: snapshot.actionPlansOpen,
@@ -273,7 +250,6 @@ function formatRiskAnalystSnapshot(snapshot: any) {
         avgResolutionDays: snapshot.avgResolutionDays,
 
         summary: snapshot.summary,
-
         createdAt: snapshot.createdAt,
         updatedAt: snapshot.updatedAt,
     }
@@ -282,7 +258,6 @@ function formatRiskAnalystSnapshot(snapshot: any) {
 function formatLogisticsSnapshot(snapshot: any) {
     return {
         id: snapshot.id,
-
         userId: snapshot.userId,
         user: snapshot.user
             ? {
@@ -308,28 +283,20 @@ function formatLogisticsSnapshot(snapshot: any) {
         rejectedRequests: snapshot.rejectedRequests,
         canceledRequests: snapshot.canceledRequests,
 
-        requestsReceivedThisWeek:
-            snapshot.requestsReceivedThisWeek,
-        requestsAcceptedThisWeek:
-            snapshot.requestsAcceptedThisWeek,
-        requestsApprovedThisWeek:
-            snapshot.requestsApprovedThisWeek,
-        requestsRejectedThisWeek:
-            snapshot.requestsRejectedThisWeek,
-        requestsCanceledThisWeek:
-            snapshot.requestsCanceledThisWeek,
+        requestsReceivedThisWeek: snapshot.requestsReceivedThisWeek,
+        requestsAcceptedThisWeek: snapshot.requestsAcceptedThisWeek,
+        requestsApprovedThisWeek: snapshot.requestsApprovedThisWeek,
+        requestsRejectedThisWeek: snapshot.requestsRejectedThisWeek,
+        requestsCanceledThisWeek: snapshot.requestsCanceledThisWeek,
 
         partsUnderLogisticsReview:
             snapshot.partsUnderLogisticsReview,
-        partsApprovedThisWeek:
-            snapshot.partsApprovedThisWeek,
+        partsApprovedThisWeek: snapshot.partsApprovedThisWeek,
 
-        oldestPendingRequestDays:
-            snapshot.oldestPendingRequestDays,
+        oldestPendingRequestDays: snapshot.oldestPendingRequestDays,
         avgReviewDays: snapshot.avgReviewDays,
 
         summary: snapshot.summary,
-
         createdAt: snapshot.createdAt,
         updatedAt: snapshot.updatedAt,
     }
@@ -338,14 +305,12 @@ function formatLogisticsSnapshot(snapshot: any) {
 function formatEvent(event: any) {
     return {
         id: event.id,
-
         week: event.week,
         month: event.month,
         year: event.year,
 
         weekStartDate: event.weekStartDate,
         weekEndDate: event.weekEndDate,
-
         eventType: event.eventType,
 
         riskEventId: event.riskEventId,
@@ -374,7 +339,6 @@ function formatEvent(event: any) {
         oldValue: event.oldValue,
         newValue: event.newValue,
         description: event.description,
-
         createdAt: event.createdAt,
     }
 }
@@ -401,6 +365,28 @@ export async function GET(req: NextRequest) {
         }
 
         const { searchParams } = new URL(req.url)
+
+        // Consulta opcional para comparar snapshots de qualquer ano.
+        // As consultas existentes continuam usando os filtros habituais.
+        if (searchParams.get("view") === "history") {
+            const snapshots = await prisma.weeklySnapshot.findMany({
+                orderBy: [
+                    { year: "desc" },
+                    { week: "desc" },
+                ],
+            })
+
+            return NextResponse.json(
+                {
+                    snapshots: snapshots.map(formatSnapshot),
+                },
+                {
+                    headers: {
+                        "Cache-Control": "private, no-store",
+                    },
+                }
+            )
+        }
 
         const year =
             toNumberOrUndefined(searchParams.get("year")) ||
@@ -431,12 +417,8 @@ export async function GET(req: NextRequest) {
             prisma.weeklySnapshot.findMany({
                 where,
                 orderBy: [
-                    {
-                        year: "desc",
-                    },
-                    {
-                        week: "desc",
-                    },
+                    { year: "desc" },
+                    { week: "desc" },
                 ],
             }),
 
@@ -453,15 +435,9 @@ export async function GET(req: NextRequest) {
                     },
                 },
                 orderBy: [
-                    {
-                        year: "desc",
-                    },
-                    {
-                        week: "desc",
-                    },
-                    {
-                        openRisks: "desc",
-                    },
+                    { year: "desc" },
+                    { week: "desc" },
+                    { openRisks: "desc" },
                 ],
             }),
 
@@ -478,15 +454,9 @@ export async function GET(req: NextRequest) {
                     },
                 },
                 orderBy: [
-                    {
-                        year: "desc",
-                    },
-                    {
-                        week: "desc",
-                    },
-                    {
-                        pendingRequests: "desc",
-                    },
+                    { year: "desc" },
+                    { week: "desc" },
+                    { pendingRequests: "desc" },
                 ],
             }),
 
@@ -552,10 +522,7 @@ export async function GET(req: NextRequest) {
                 },
             }),
 
-            /*
-             * Posição atual do time de Risk.
-             * Essa consulta é ao vivo e não depende do snapshot selecionado.
-             */
+            // Posição atual do time; não depende da CW selecionada.
             prisma.user.findMany({
                 where: {
                     isActive: true,
@@ -605,21 +572,16 @@ export async function GET(req: NextRequest) {
                 year,
                 month: month || null,
                 week: week || null,
-                availableYears: availableYears.map(
-                    (item) => item.year
-                ),
-                availableMonths: availableMonths.map(
-                    (item) => item.month
-                ),
-                availableWeeks: availableWeeks.map(
-                    (item) => item.week
-                ),
+                availableYears:
+                    availableYears.map((item) => item.year),
+                availableMonths:
+                    availableMonths.map((item) => item.month),
+                availableWeeks:
+                    availableWeeks.map((item) => item.week),
             },
             snapshots: snapshots.map(formatSnapshot),
             riskAnalystSnapshots:
-                riskAnalystSnapshots.map(
-                    formatRiskAnalystSnapshot
-                ),
+                riskAnalystSnapshots.map(formatRiskAnalystSnapshot),
             logisticsSnapshots:
                 logisticsSnapshots.map(formatLogisticsSnapshot),
             events: events.map(formatEvent),

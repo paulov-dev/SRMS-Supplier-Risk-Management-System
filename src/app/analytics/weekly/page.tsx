@@ -1,17 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { SiteHeader } from "@/components/dashboard/site-header"
-
 import {
     SidebarInset,
     SidebarProvider,
 } from "@/components/ui/sidebar"
-
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 
 import {
@@ -21,11 +18,9 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-
 import {
     Select,
     SelectContent,
@@ -33,14 +28,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-
 import {
     Tabs,
     TabsContent,
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs"
-
 import {
     Table,
     TableBody,
@@ -49,7 +42,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-
 import {
     type ChartConfig,
     ChartContainer,
@@ -71,7 +63,6 @@ import {
 } from "recharts"
 
 import {
-    AlertTriangle,
     BarChart3,
     CalendarDays,
     CheckCircle2,
@@ -83,13 +74,11 @@ import {
     ShieldAlert,
     TrendingDown,
     TrendingUp,
-    Truck,
     Users,
 } from "lucide-react"
 
 type WeeklySnapshot = {
     id: string
-
     week: number
     month: number
     year: number
@@ -137,12 +126,10 @@ type WeeklySnapshot = {
     risksClosedThisWeek: number
     risksCanceledThisWeek: number
     risksReopenedThisWeek: number
-
     risksImprovedThisWeek: number
     risksWorsenedThisWeek: number
 
     summary?: any
-
     createdAt: string
     updatedAt: string
 }
@@ -156,7 +143,6 @@ type UserSummary = {
 
 type RiskAnalystSnapshot = {
     id: string
-
     userId: string
     user: UserSummary
 
@@ -181,7 +167,6 @@ type RiskAnalystSnapshot = {
     risksClosedThisWeek: number
     risksCanceledThisWeek: number
     risksReopenedThisWeek: number
-
     risksImprovedThisWeek: number
     risksWorsenedThisWeek: number
 
@@ -192,13 +177,11 @@ type RiskAnalystSnapshot = {
 
     oldestOpenRiskDays: number | null
     avgResolutionDays: number | null
-
     summary?: any
 }
 
 type LogisticsSnapshot = {
     id: string
-
     userId: string
     user: UserSummary
 
@@ -224,13 +207,11 @@ type LogisticsSnapshot = {
 
     oldestPendingRequestDays: number | null
     avgReviewDays: number | null
-
     summary?: any
 }
 
 type WeeklyEvent = {
     id: string
-
     week: number
     month: number
     year: number
@@ -250,7 +231,6 @@ type WeeklyEvent = {
     oldValue: string | null
     newValue: string | null
     description: string | null
-
     createdAt: string
 }
 
@@ -360,7 +340,6 @@ function formatDate(value?: string | null) {
     if (!value) return "-"
 
     const date = new Date(value)
-
     if (Number.isNaN(date.getTime())) return "-"
 
     return new Intl.DateTimeFormat("pt-BR", {
@@ -374,7 +353,6 @@ function formatDateTime(value?: string | null) {
     if (!value) return "-"
 
     const date = new Date(value)
-
     if (Number.isNaN(date.getTime())) return "-"
 
     return new Intl.DateTimeFormat("pt-BR", {
@@ -405,61 +383,23 @@ function getMonthLabel(month: number) {
 function getEventBadge(type: string) {
     switch (type) {
         case "RISK_CREATED":
-            return (
-                <Badge className="bg-blue-600">
-                    RM criada
-                </Badge>
-            )
-
+            return <Badge className="bg-blue-600">RM criada</Badge>
         case "RISK_CLOSED":
-            return (
-                <Badge className="bg-green-600">
-                    RM fechada
-                </Badge>
-            )
-
+            return <Badge className="bg-green-600">RM fechada</Badge>
         case "RISK_CANCELED":
-            return (
-                <Badge variant="secondary">
-                    RM cancelada
-                </Badge>
-            )
-
+            return <Badge variant="secondary">RM cancelada</Badge>
         case "RISK_LEVEL_WORSENED":
-            return (
-                <Badge variant="destructive">
-                    Piorou
-                </Badge>
-            )
-
+            return <Badge variant="destructive">Piorou</Badge>
         case "RISK_LEVEL_IMPROVED":
-            return (
-                <Badge className="bg-green-600">
-                    Melhorou
-                </Badge>
-            )
-
+            return <Badge className="bg-green-600">Melhorou</Badge>
         case "RISK_ASSIGNED":
-            return (
-                <Badge className="bg-purple-600">
-                    Atribuição
-                </Badge>
-            )
-
+            return <Badge className="bg-purple-600">Atribuição</Badge>
         default:
-            return (
-                <Badge variant="outline">
-                    {type}
-                </Badge>
-            )
+            return <Badge variant="outline">{type}</Badge>
     }
 }
 
-function EmptyState({
-    message,
-}: {
-    message: string
-}) {
+function EmptyState({ message }: { message: string }) {
     return (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             {message}
@@ -486,11 +426,9 @@ function MetricCard({
                         <p className="truncate text-sm text-muted-foreground">
                             {title}
                         </p>
-
                         <p className="mt-1 text-2xl font-bold">
                             {value}
                         </p>
-
                         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                             {description}
                         </p>
@@ -546,26 +484,19 @@ function WeeklyEvolutionChart({
         >
             <AreaChart
                 data={data}
-                margin={{
-                    left: -12,
-                    right: 12,
-                    top: 10,
-                    bottom: 0,
-                }}
+                margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
             >
                 <CartesianGrid
                     vertical={false}
                     strokeDasharray="3 3"
                     className="stroke-muted"
                 />
-
                 <XAxis
                     dataKey="label"
                     tickLine={false}
                     axisLine={false}
                     fontSize={11}
                 />
-
                 <YAxis
                     tickLine={false}
                     axisLine={false}
@@ -573,10 +504,7 @@ function WeeklyEvolutionChart({
                     fontSize={11}
                     width={28}
                 />
-
-                <ChartTooltip
-                    content={<ChartTooltipContent />}
-                />
+                <ChartTooltip content={<ChartTooltipContent />} />
 
                 <Area
                     type="monotone"
@@ -586,7 +514,6 @@ function WeeklyEvolutionChart({
                     fillOpacity={0.18}
                     strokeWidth={2}
                 />
-
                 <Area
                     type="monotone"
                     dataKey="redRisks"
@@ -595,7 +522,6 @@ function WeeklyEvolutionChart({
                     fillOpacity={0.16}
                     strokeWidth={2}
                 />
-
                 <Area
                     type="monotone"
                     dataKey="yellowRisks"
@@ -624,9 +550,7 @@ function CreatedClosedChart({
         }))
 
     if (data.length === 0) {
-        return (
-            <EmptyState message="Nenhum dado encontrado." />
-        )
+        return <EmptyState message="Nenhum dado encontrado." />
     }
 
     return (
@@ -636,26 +560,19 @@ function CreatedClosedChart({
         >
             <BarChart
                 data={data}
-                margin={{
-                    left: -12,
-                    right: 12,
-                    top: 10,
-                    bottom: 0,
-                }}
+                margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
             >
                 <CartesianGrid
                     vertical={false}
                     strokeDasharray="3 3"
                     className="stroke-muted"
                 />
-
                 <XAxis
                     dataKey="label"
                     tickLine={false}
                     axisLine={false}
                     fontSize={11}
                 />
-
                 <YAxis
                     tickLine={false}
                     axisLine={false}
@@ -663,17 +580,12 @@ function CreatedClosedChart({
                     fontSize={11}
                     width={28}
                 />
-
-                <ChartTooltip
-                    content={<ChartTooltipContent />}
-                />
-
+                <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar
                     dataKey="created"
                     fill={COLORS.blue}
                     radius={[6, 6, 0, 0]}
                 />
-
                 <Bar
                     dataKey="closed"
                     fill={COLORS.green}
@@ -699,9 +611,7 @@ function ImprovedWorsenedChart({
         }))
 
     if (data.length === 0) {
-        return (
-            <EmptyState message="Nenhum dado encontrado." />
-        )
+        return <EmptyState message="Nenhum dado encontrado." />
     }
 
     return (
@@ -711,26 +621,19 @@ function ImprovedWorsenedChart({
         >
             <BarChart
                 data={data}
-                margin={{
-                    left: -12,
-                    right: 12,
-                    top: 10,
-                    bottom: 0,
-                }}
+                margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
             >
                 <CartesianGrid
                     vertical={false}
                     strokeDasharray="3 3"
                     className="stroke-muted"
                 />
-
                 <XAxis
                     dataKey="label"
                     tickLine={false}
                     axisLine={false}
                     fontSize={11}
                 />
-
                 <YAxis
                     tickLine={false}
                     axisLine={false}
@@ -738,17 +641,12 @@ function ImprovedWorsenedChart({
                     fontSize={11}
                     width={28}
                 />
-
-                <ChartTooltip
-                    content={<ChartTooltipContent />}
-                />
-
+                <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar
                     dataKey="improved"
                     fill={COLORS.green}
                     radius={[6, 6, 0, 0]}
                 />
-
                 <Bar
                     dataKey="worsened"
                     fill={COLORS.red}
@@ -765,17 +663,11 @@ function RiskDistributionChart({
     snapshot?: WeeklySnapshot
 }) {
     if (!snapshot) {
-        return (
-            <EmptyState message="Nenhum snapshot selecionado." />
-        )
+        return <EmptyState message="Nenhum snapshot selecionado." />
     }
 
     const data = [
-        {
-            name: "Red",
-            total: snapshot.redRisks,
-            color: COLORS.red,
-        },
+        { name: "Red", total: snapshot.redRisks, color: COLORS.red },
         {
             name: "Yellow",
             total: snapshot.yellowRisks,
@@ -818,7 +710,6 @@ function RiskDistributionChart({
                 <ChartTooltip
                     content={<ChartTooltipContent hideLabel />}
                 />
-
                 <Pie
                     data={data}
                     dataKey="total"
@@ -829,10 +720,7 @@ function RiskDistributionChart({
                     strokeWidth={1}
                 >
                     {data.map((item) => (
-                        <Cell
-                            key={item.name}
-                            fill={item.color}
-                        />
+                        <Cell key={item.name} fill={item.color} />
                     ))}
                 </Pie>
             </PieChart>
@@ -840,7 +728,10 @@ function RiskDistributionChart({
     )
 }
 
-function getDelta(current?: number | null, previous?: number | null) {
+function getDelta(
+    current?: number | null,
+    previous?: number | null
+) {
     const currentValue = current || 0
     const previousValue = previous || 0
 
@@ -855,36 +746,27 @@ function DeltaBadge({
     inverse?: boolean
 }) {
     if (value === 0) {
-        return (
-            <Badge variant="outline">
-                0
-            </Badge>
-        )
+        return <Badge variant="outline">0</Badge>
     }
 
     const isPositive = value > 0
-
     const isGood = inverse ? !isPositive : isPositive
 
     return (
-        <Badge
-            className={
-                isGood
-                    ? "bg-green-600"
-                    : "bg-red-600"
-            }
-        >
+        <Badge className={isGood ? "bg-green-600" : "bg-red-600"}>
             {isPositive ? "+" : ""}
             {value}
         </Badge>
     )
 }
 
-function getSummaryItems(snapshot: WeeklySnapshot | undefined, key: string) {
+function getSummaryItems(
+    snapshot: WeeklySnapshot | undefined,
+    key: string
+) {
     if (!snapshot?.summary) return []
 
     const value = snapshot.summary[key]
-
     if (!Array.isArray(value)) return []
 
     return value
@@ -934,10 +816,7 @@ function WeeklyChangeList({
     return (
         <div className="rounded-lg border p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
-                <h4 className="font-medium">
-                    {title}
-                </h4>
-
+                <h4 className="font-medium">{title}</h4>
                 <Badge className={badgeClassName}>
                     {items.length}
                 </Badge>
@@ -1045,7 +924,6 @@ function WeeklyChangesDetails({
                     <h3 className="text-base font-semibold">
                         Mudanças da CW{current.week} / {current.year}
                     </h3>
-
                     <p className="text-sm text-muted-foreground">
                         Clique para visualizar inclusões, saídas e alterações de farol da semana.
                     </p>
@@ -1064,21 +942,18 @@ function WeeklyChangesDetails({
                         emptyMessage="Nenhuma RM incluída nesta semana."
                         variant="default"
                     />
-
                     <WeeklyChangeList
                         title="RMs fechadas"
                         items={closedRisks}
                         emptyMessage="Nenhuma RM fechada nesta semana."
                         variant="success"
                     />
-
                     <WeeklyChangeList
                         title="RMs canceladas"
                         items={canceledRisks}
                         emptyMessage="Nenhuma RM cancelada nesta semana."
                         variant="warning"
                     />
-
                     <WeeklyChangeList
                         title="RMs que melhoraram"
                         items={improvedRisks}
@@ -1086,7 +961,6 @@ function WeeklyChangesDetails({
                         variant="success"
                         showStatusChange
                     />
-
                     <WeeklyChangeList
                         title="RMs que pioraram"
                         items={worsenedRisks}
@@ -1111,15 +985,11 @@ function WeeklyComparisonCard({
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>
-                        Comparativo semanal
-                    </CardTitle>
-
+                    <CardTitle>Comparativo semanal</CardTitle>
                     <CardDescription>
                         Compare a semana selecionada com a semana anterior.
                     </CardDescription>
                 </CardHeader>
-
                 <CardContent>
                     <EmptyState message="Nenhum snapshot disponível para comparação." />
                 </CardContent>
@@ -1131,17 +1001,13 @@ function WeeklyComparisonCard({
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>
-                        Comparativo semanal
-                    </CardTitle>
-
+                    <CardTitle>Comparativo semanal</CardTitle>
                     <CardDescription>
                         Compare a semana selecionada com a semana anterior.
                     </CardDescription>
                 </CardHeader>
-
                 <CardContent>
-                    <EmptyState message="Existe snapshot para a semana atual, mas não foi encontrado snapshot da semana anterior." />
+                    <EmptyState message="Selecione outro snapshot para comparar. A opção automática usa o último snapshot disponível anterior à base, inclusive de outro ano." />
                 </CardContent>
             </Card>
         )
@@ -1227,22 +1093,19 @@ function WeeklyComparisonCard({
             <CardHeader>
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <CardTitle>
-                            Comparativo semanal
-                        </CardTitle>
-
+                        <CardTitle>Comparativo semanal</CardTitle>
                         <CardDescription>
-                            Semana atual comparada com a semana anterior.
+                            Diferença = semana base − semana de comparação.
+                            Semanas sem snapshot não são estimadas.
                         </CardDescription>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
                         <Badge variant="outline">
-                            Atual: CW{current.week} / {current.year}
+                            Base: CW{current.week} / {current.year}
                         </Badge>
-
                         <Badge variant="secondary">
-                            Anterior: CW{previous.week} / {previous.year}
+                            Comparação: CW{previous.week} / {previous.year}
                         </Badge>
                     </div>
                 </div>
@@ -1255,13 +1118,16 @@ function WeeklyComparisonCard({
                             <TableRow>
                                 <TableHead>Indicador</TableHead>
                                 <TableHead className="text-right">
-                                    Semana atual
+                                    Semana base
                                 </TableHead>
                                 <TableHead className="text-right">
-                                    Semana anterior
+                                    Comparação
                                 </TableHead>
                                 <TableHead className="text-right">
                                     Diferença
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    Variação
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1278,20 +1144,25 @@ function WeeklyComparisonCard({
                                         <TableCell className="font-medium">
                                             {row.label}
                                         </TableCell>
-
                                         <TableCell className="text-right">
                                             {row.current}
                                         </TableCell>
-
                                         <TableCell className="text-right">
                                             {row.previous}
                                         </TableCell>
-
                                         <TableCell className="text-right">
                                             <DeltaBadge
                                                 value={delta}
                                                 inverse={row.inverse}
                                             />
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {formatPercent(
+                                                getPercentDelta(
+                                                    row.current,
+                                                    row.previous
+                                                )
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 )
@@ -1299,6 +1170,12 @@ function WeeklyComparisonCard({
                         </TableBody>
                     </Table>
                 </ResponsiveTableWrapper>
+
+                <p className="my-3 text-xs text-muted-foreground">
+                    Quando a comparação é zero, uma variação para valor
+                    diferente de zero não tem base percentual. As movimentações
+                    abaixo pertencem à CW base, não ao intervalo entre as seleções.
+                </p>
 
                 <WeeklyChangesDetails current={current} />
             </CardContent>
@@ -1308,59 +1185,52 @@ function WeeklyComparisonCard({
 
 function WeeklyComparisonSelector({
     snapshots,
+    currentKey,
     currentValue,
     previousValue,
     onCurrentChange,
     onPreviousChange,
 }: {
     snapshots: WeeklySnapshot[]
+    currentKey?: string
     currentValue: string
     previousValue: string
     onCurrentChange: (value: string) => void
     onPreviousChange: (value: string) => void
 }) {
-    const options = snapshots
-        .slice()
-        .sort((a, b) => {
-            if (b.year !== a.year) {
-                return b.year - a.year
-            }
-
-            return b.week - a.week
-        })
+    const options = snapshots.slice().sort((a, b) => {
+        if (b.year !== a.year) return b.year - a.year
+        return b.week - a.week
+    })
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle>
-                    Escolher semanas para comparação
-                </CardTitle>
-
+                <CardTitle>Escolher semanas para comparação</CardTitle>
                 <CardDescription>
-                    Selecione duas semanas do histórico para comparar os indicadores e visualizar as mudanças.
+                    Selecione duas CWs de qualquer ano. Os filtros do topo
+                    continuam controlando a evolução, os totais do período
+                    e os dados detalhados.
                 </CardDescription>
             </CardHeader>
 
             <CardContent>
                 <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                        <Label>
+                        <Label htmlFor="comparison-current">
                             Semana base
                         </Label>
-
                         <Select
                             value={currentValue}
                             onValueChange={onCurrentChange}
                         >
-                            <SelectTrigger>
+                            <SelectTrigger id="comparison-current">
                                 <SelectValue placeholder="Semana base" />
                             </SelectTrigger>
-
                             <SelectContent>
                                 <SelectItem value="latest">
-                                    Semana mais recente
+                                    Mais recente no período filtrado
                                 </SelectItem>
-
                                 {options.map((snapshot) => (
                                     <SelectItem
                                         key={`${snapshot.year}-${snapshot.week}-current`}
@@ -1374,27 +1244,27 @@ function WeeklyComparisonSelector({
                     </div>
 
                     <div className="space-y-2">
-                        <Label>
+                        <Label htmlFor="comparison-previous">
                             Comparar com
                         </Label>
-
                         <Select
                             value={previousValue}
                             onValueChange={onPreviousChange}
                         >
-                            <SelectTrigger>
+                            <SelectTrigger id="comparison-previous">
                                 <SelectValue placeholder="Comparar com" />
                             </SelectTrigger>
-
                             <SelectContent>
                                 <SelectItem value="previous">
-                                    Semana anterior à base
+                                    Último snapshot anterior à base
                                 </SelectItem>
-
                                 {options.map((snapshot) => (
                                     <SelectItem
                                         key={`${snapshot.year}-${snapshot.week}-previous`}
                                         value={`${snapshot.year}-${snapshot.week}`}
+                                        disabled={
+                                            `${snapshot.year}-${snapshot.week}` === currentKey
+                                        }
                                     >
                                         CW{snapshot.week} / {snapshot.year}
                                     </SelectItem>
@@ -1403,24 +1273,46 @@ function WeeklyComparisonSelector({
                         </Select>
                     </div>
                 </div>
+
+                {snapshots.length < 2 && (
+                    <p
+                        className="mt-3 text-sm text-muted-foreground"
+                        role="status"
+                    >
+                        São necessários pelo menos dois snapshots para comparar semanas.
+                    </p>
+                )}
+
+                {previousValue === currentKey && (
+                    <p
+                        className="mt-3 text-sm text-muted-foreground"
+                        role="status"
+                    >
+                        Selecione uma semana diferente da semana base.
+                    </p>
+                )}
             </CardContent>
         </Card>
     )
 }
 
-function getPercentDelta(current?: number | null, previous?: number | null) {
+function getPercentDelta(
+    current?: number | null,
+    previous?: number | null
+) {
     const currentValue = current || 0
     const previousValue = previous || 0
 
     if (previousValue === 0) {
         if (currentValue === 0) return 0
-        return 100
+        return null
     }
 
     return ((currentValue - previousValue) / previousValue) * 100
 }
 
-function formatPercent(value: number) {
+function formatPercent(value: number | null) {
+    if (value === null) return "Sem base percentual"
     return `${value > 0 ? "+" : ""}${formatNumber(value)}%`
 }
 
@@ -1431,9 +1323,7 @@ function ExecutiveStatusCard({
     current?: WeeklySnapshot
     previous?: WeeklySnapshot
 }) {
-    if (!current || !previous) {
-        return null
-    }
+    if (!current || !previous) return null
 
     const redDelta = getDelta(current.redRisks, previous.redRisks)
     const openDelta = getDelta(current.openRisks, previous.openRisks)
@@ -1492,18 +1382,13 @@ function ExecutiveStatusCard({
             <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <CardTitle>
-                            Semáforo executivo da semana
-                        </CardTitle>
-
+                        <CardTitle>Semáforo executivo da semana</CardTitle>
                         <CardDescription>
-                            Leitura consolidada da semana base em comparação com a semana escolhida.
+                            Leitura consolidada da semana base em comparação
+                            com a semana escolhida.
                         </CardDescription>
                     </div>
-
-                    <Badge className={badgeClassName}>
-                        {status}
-                    </Badge>
+                    <Badge className={badgeClassName}>{status}</Badge>
                 </div>
             </CardHeader>
 
@@ -1515,34 +1400,29 @@ function ExecutiveStatusCard({
                         previous={previous.redRisks}
                         inverse
                     />
-
                     <InsightItem
                         label="RMs abertas"
                         current={current.openRisks}
                         previous={previous.openRisks}
                         inverse
                     />
-
                     <InsightItem
                         label="Planos atrasados"
                         current={current.overdueActionPlans}
                         previous={previous.overdueActionPlans}
                         inverse
                     />
-
                     <InsightItem
                         label="Logística pendente"
                         current={current.pendingLogisticsRequests}
                         previous={previous.pendingLogisticsRequests}
                         inverse
                     />
-
                     <InsightItem
                         label="RMs que melhoraram"
                         current={current.risksImprovedThisWeek}
                         previous={previous.risksImprovedThisWeek}
                     />
-
                     <InsightItem
                         label="RMs que pioraram"
                         current={current.risksWorsenedThisWeek}
@@ -1570,22 +1450,15 @@ function CurrentStateMetric({
         <div className="rounded-xl border bg-card p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <p className="text-sm text-muted-foreground">
-                        {label}
-                    </p>
-
+                    <p className="text-sm text-muted-foreground">{label}</p>
                     <p className="mt-1 text-2xl font-bold">
                         {formatNumber(value)}
                     </p>
-
                     <p className="mt-1 text-xs text-muted-foreground">
                         {description}
                     </p>
                 </div>
-
-                <div className="rounded-lg bg-muted p-2">
-                    {icon}
-                </div>
+                <div className="rounded-lg bg-muted p-2">{icon}</div>
             </div>
         </div>
     )
@@ -1610,9 +1483,7 @@ function CurrentStateCountBadge({
     }
 
     return (
-        <Badge
-            className={`min-w-9 justify-center ${className}`}
-        >
+        <Badge className={`min-w-9 justify-center ${className}`}>
             {value}
         </Badge>
     )
@@ -1631,7 +1502,6 @@ function CurrentRiskTeamStateCard({
             accumulator.redRisks += analyst.risks.red
             accumulator.parts += analyst.parts.total
             accumulator.completedParts += analyst.parts.completed
-
             return accumulator
         },
         {
@@ -1648,10 +1518,7 @@ function CurrentRiskTeamStateCard({
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <CardTitle>
-                                Disposição atual do time de Risk
-                            </CardTitle>
-
+                            <CardTitle>Disposição atual do time de Risk</CardTitle>
                             <Badge className="gap-1 bg-emerald-600">
                                 <Radio className="h-3 w-3" />
                                 Ao vivo
@@ -1684,28 +1551,24 @@ function CurrentRiskTeamStateCard({
                                 description="Role Risk_Analyst"
                                 icon={<Users className="h-5 w-5 text-blue-600" />}
                             />
-
                             <CurrentStateMetric
                                 label="RMs abertas"
                                 value={totals.openRisks}
                                 description="Atribuídas ao time"
                                 icon={<BarChart3 className="h-5 w-5 text-blue-600" />}
                             />
-
                             <CurrentStateMetric
                                 label="RMs Red"
                                 value={totals.redRisks}
                                 description="Prioridade imediata"
                                 icon={<ShieldAlert className="h-5 w-5 text-red-600" />}
                             />
-
                             <CurrentStateMetric
                                 label="PNs acompanhados"
                                 value={totals.parts}
-                                description="Vinculados a RMs abertas"                                
+                                description="Vinculados a RMs abertas"
                                 icon={<PackageCheck className="h-5 w-5 text-violet-600" />}
                             />
-
                             <CurrentStateMetric
                                 label="PNs concluídos"
                                 value={totals.completedParts}
@@ -1714,26 +1577,19 @@ function CurrentRiskTeamStateCard({
                             />
                         </div>
 
-                        <Tabs
-                            defaultValue="current-risks"
-                            className="w-full"
-                        >
+                        <Tabs defaultValue="current-risks" className="w-full">
                             <div className="overflow-x-auto pb-1">
                                 <TabsList className="w-max">
                                     <TabsTrigger value="current-risks">
                                         RMs por analista
                                     </TabsTrigger>
-
                                     <TabsTrigger value="current-parts">
                                         PNs por analista
                                     </TabsTrigger>
                                 </TabsList>
                             </div>
 
-                            <TabsContent
-                                value="current-risks"
-                                className="mt-4"
-                            >
+                            <TabsContent value="current-risks" className="mt-4">
                                 <ResponsiveTableWrapper>
                                     <Table>
                                         <TableHeader>
@@ -1759,7 +1615,6 @@ function CurrentRiskTeamStateCard({
                                                         >
                                                             {analyst.user.name}
                                                         </Link>
-
                                                         <p className="text-xs text-muted-foreground">
                                                             {analyst.user.email}
                                                         </p>
@@ -1768,29 +1623,41 @@ function CurrentRiskTeamStateCard({
                                                     <TableCell className="text-center font-semibold">
                                                         {analyst.risks.open}
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.risks.red} className="bg-red-600" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.risks.red}
+                                                            className="bg-red-600"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.risks.yellow} className="bg-yellow-500 text-black" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.risks.yellow}
+                                                            className="bg-yellow-500 text-black"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.risks.green} className="bg-green-600" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.risks.green}
+                                                            className="bg-green-600"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.risks.orange} className="bg-orange-500" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.risks.orange}
+                                                            className="bg-orange-500"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.risks.grey} className="bg-slate-500" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.risks.grey}
+                                                            className="bg-slate-500"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.risks.blue} className="bg-blue-600" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.risks.blue}
+                                                            className="bg-blue-600"
+                                                        />
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
@@ -1799,10 +1666,7 @@ function CurrentRiskTeamStateCard({
                                 </ResponsiveTableWrapper>
                             </TabsContent>
 
-                            <TabsContent
-                                value="current-parts"
-                                className="mt-4"
-                            >
+                            <TabsContent value="current-parts" className="mt-4">
                                 <ResponsiveTableWrapper>
                                     <Table>
                                         <TableHeader>
@@ -1829,7 +1693,6 @@ function CurrentRiskTeamStateCard({
                                                         >
                                                             {analyst.user.name}
                                                         </Link>
-
                                                         <p className="text-xs text-muted-foreground">
                                                             {analyst.user.email}
                                                         </p>
@@ -1838,40 +1701,53 @@ function CurrentRiskTeamStateCard({
                                                     <TableCell className="text-center font-semibold">
                                                         {analyst.parts.total}
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.parts.red} className="bg-red-600" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.parts.red}
+                                                            className="bg-red-600"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.parts.yellow} className="bg-yellow-500 text-black" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.parts.yellow}
+                                                            className="bg-yellow-500 text-black"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.parts.green} className="bg-green-600" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.parts.green}
+                                                            className="bg-green-600"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.parts.orange} className="bg-orange-500" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.parts.orange}
+                                                            className="bg-orange-500"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.parts.grey} className="bg-slate-500" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.parts.grey}
+                                                            className="bg-slate-500"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.parts.completed} className="bg-blue-600" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.parts.completed}
+                                                            className="bg-blue-600"
+                                                        />
                                                     </TableCell>
-
                                                     <TableCell className="text-center">
-                                                        <CurrentStateCountBadge value={analyst.parts.withoutDemand} className="bg-zinc-700" />
+                                                        <CurrentStateCountBadge
+                                                            value={analyst.parts.withoutDemand}
+                                                            className="bg-zinc-700"
+                                                        />
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>
                                     </Table>
                                 </ResponsiveTableWrapper>
-
                             </TabsContent>
                         </Tabs>
                     </>
@@ -1896,7 +1772,8 @@ function InsightItem({
     const percent = getPercentDelta(current, previous)
 
     const isPositive = delta > 0
-    const isGood = delta === 0 ? null : inverse ? !isPositive : isPositive
+    const isGood =
+        delta === 0 ? null : inverse ? !isPositive : isPositive
 
     const icon =
         delta === 0 ? (
@@ -1911,30 +1788,17 @@ function InsightItem({
         <div className="rounded-lg border p-4">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <p className="text-sm text-muted-foreground">
-                        {label}
-                    </p>
-
-                    <p className="mt-1 text-xl font-bold">
-                        {current}
-                    </p>
-
+                    <p className="text-sm text-muted-foreground">{label}</p>
+                    <p className="mt-1 text-xl font-bold">{current}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                         Anterior: {previous}
                     </p>
                 </div>
-
-                <div className="rounded-lg bg-muted p-2">
-                    {icon}
-                </div>
+                <div className="rounded-lg bg-muted p-2">{icon}</div>
             </div>
 
             <div className="mt-3 flex items-center justify-between gap-2">
-                <DeltaBadge
-                    value={delta}
-                    inverse={inverse}
-                />
-
+                <DeltaBadge value={delta} inverse={inverse} />
                 <span className="text-xs text-muted-foreground">
                     {formatPercent(percent)}
                 </span>
@@ -2012,19 +1876,13 @@ function WeeklyComparisonBarChart({
         >
             <BarChart
                 data={data}
-                margin={{
-                    left: 4,
-                    right: 12,
-                    top: 10,
-                    bottom: 0,
-                }}
+                margin={{ left: 4, right: 12, top: 10, bottom: 0 }}
             >
                 <CartesianGrid
                     vertical={false}
                     strokeDasharray="3 3"
                     className="stroke-muted"
                 />
-
                 <XAxis
                     dataKey="indicator"
                     tickLine={false}
@@ -2032,7 +1890,6 @@ function WeeklyComparisonBarChart({
                     fontSize={11}
                     interval={0}
                 />
-
                 <YAxis
                     tickLine={false}
                     axisLine={false}
@@ -2040,17 +1897,12 @@ function WeeklyComparisonBarChart({
                     fontSize={11}
                     width={28}
                 />
-
-                <ChartTooltip
-                    content={<ChartTooltipContent />}
-                />
-
+                <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar
                     dataKey="previous"
                     fill={COLORS.slate}
                     radius={[6, 6, 0, 0]}
                 />
-
                 <Bar
                     dataKey="current"
                     fill={COLORS.blue}
@@ -2124,7 +1976,6 @@ function RankingCards({
                     suffix: "RMs abertas",
                 }))}
             />
-
             <RankingCard
                 title="Top analistas com mais RMs Red"
                 description="Concentração de criticidade por responsável."
@@ -2136,7 +1987,6 @@ function RankingCards({
                     suffix: "RMs Red",
                 }))}
             />
-
             <RankingCard
                 title="Top logística com mais pendências"
                 description="Solicitações pendentes por responsável logístico."
@@ -2148,7 +1998,6 @@ function RankingCards({
                     suffix: "pendências",
                 }))}
             />
-
             <RankingCard
                 title="Top logística por tempo médio de análise"
                 description="Maiores tempos médios registrados na semana base."
@@ -2203,18 +2052,12 @@ function RankingCard({
         <Card>
             <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
-                    <CardTitle>
-                        {title}
-                    </CardTitle>
-
+                    <CardTitle>{title}</CardTitle>
                     <CardDescription className="mt-1">
                         {description}
                     </CardDescription>
                 </div>
-
-                <Badge variant="secondary">
-                    Top 5
-                </Badge>
+                <Badge variant="secondary">Top 5</Badge>
             </CardHeader>
 
             <CardContent>
@@ -2229,9 +2072,7 @@ function RankingCard({
                             >
                                 <div className="flex min-w-0 items-center gap-3">
                                     <div
-                                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${getPositionClass(
-                                            index
-                                        )}`}
+                                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${getPositionClass(index)}`}
                                     >
                                         {index + 1}
                                     </div>
@@ -2240,20 +2081,16 @@ function RankingCard({
                                         <p className="truncate font-medium">
                                             {item.name}
                                         </p>
-
                                         <p className="truncate text-xs text-muted-foreground">
                                             {item.detail}
                                         </p>
-
                                         <div className="mt-2 h-1.5 w-full max-w-[240px] overflow-hidden rounded-full bg-muted">
                                             <div
                                                 className="h-full rounded-full bg-primary transition-[width]"
                                                 style={{
                                                     width: `${Math.max(
                                                         4,
-                                                        (item.value /
-                                                            maxValue) *
-                                                            100
+                                                        (item.value / maxValue) * 100
                                                     )}%`,
                                                 }}
                                             />
@@ -2267,7 +2104,6 @@ function RankingCard({
                                             ? formatNumber(item.value)
                                             : item.value}
                                     </p>
-
                                     <p className="text-xs text-muted-foreground">
                                         {item.suffix}
                                     </p>
@@ -2284,29 +2120,40 @@ function RankingCard({
 export default function WeeklyAnalyticsPage() {
     const [data, setData] =
         useState<WeeklySnapshotsResponse | null>(null)
+    const [history, setHistory] =
+        useState<WeeklySnapshot[]>([])
+    const [loadError, setLoadError] = useState("")
+    const activeRequest = useRef<AbortController | null>(null)
 
     const [loading, setLoading] = useState(true)
-
     const [selectedYear, setSelectedYear] =
         useState(String(new Date().getFullYear()))
-
     const [selectedMonth, setSelectedMonth] = useState("all")
     const [selectedWeek, setSelectedWeek] = useState("all")
 
-    const [comparisonCurrentWeek, setComparisonCurrentWeek] = useState("latest")
-    const [comparisonPreviousWeek, setComparisonPreviousWeek] = useState("previous")
+    const [comparisonCurrentWeek, setComparisonCurrentWeek] =
+        useState("latest")
+    const [comparisonPreviousWeek, setComparisonPreviousWeek] =
+        useState("previous")
 
     useEffect(() => {
-        loadSnapshots()
+        void loadSnapshots()
+
+        return () => activeRequest.current?.abort()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedYear, selectedMonth, selectedWeek])
 
     async function loadSnapshots() {
+        activeRequest.current?.abort()
+
+        const controller = new AbortController()
+        activeRequest.current = controller
+
         try {
             setLoading(true)
+            setLoadError("")
 
             const params = new URLSearchParams()
-
             params.set("year", selectedYear)
 
             if (selectedMonth !== "all") {
@@ -2317,51 +2164,69 @@ export default function WeeklyAnalyticsPage() {
                 params.set("week", selectedWeek)
             }
 
-            const res = await fetch(
-                `/api/weekly-snapshots?${params.toString()}`,
-                {
+            async function readSnapshots(url: string) {
+                const res = await fetch(url, {
                     credentials: "include",
+                    cache: "no-store",
+                    signal: controller.signal,
+                })
+
+                const response = await res.json()
+
+                if (!res.ok) {
+                    throw new Error(
+                        response.error ||
+                        "Erro ao buscar snapshots semanais"
+                    )
                 }
-            )
 
-            const response = await res.json()
-
-            if (!res.ok) {
-                throw new Error(
-                    response.error ||
-                    "Erro ao buscar snapshots semanais"
-                )
+                return response
             }
 
+            const [response, historyResponse] = await Promise.all([
+                readSnapshots(
+                    `/api/weekly-snapshots?${params.toString()}`
+                ),
+                readSnapshots("/api/weekly-snapshots?view=history"),
+            ])
+
+            if (controller.signal.aborted) return
+
             setData(response)
+            setHistory(historyResponse.snapshots)
         } catch (error) {
+            if (controller.signal.aborted) return
+
             console.error(error)
             setData(null)
+            setHistory([])
+            setLoadError(
+                error instanceof Error
+                    ? error.message
+                    : "Erro ao buscar snapshots semanais"
+            )
         } finally {
-            setLoading(false)
+            if (!controller.signal.aborted) {
+                setLoading(false)
+            }
         }
     }
 
-    const snapshots =
-        data?.snapshots || []
+    const snapshots = useMemo(
+        () => data?.snapshots || [],
+        [data]
+    )
 
     const sortedSnapshots = useMemo(() => {
-        return snapshots
-            .slice()
-            .sort((a, b) => {
-                if (b.year !== a.year) {
-                    return b.year - a.year
-                }
-
-                return b.week - a.week
-            })
+        return snapshots.slice().sort((a, b) => {
+            if (b.year !== a.year) return b.year - a.year
+            return b.week - a.week
+        })
     }, [snapshots])
 
     const latestSnapshot = useMemo(() => {
-        if (sortedSnapshots.length === 0) return undefined
-
         if (comparisonCurrentWeek !== "latest") {
-            return sortedSnapshots.find(
+            return history.find(
                 (snapshot) =>
                     `${snapshot.year}-${snapshot.week}` ===
                     comparisonCurrentWeek
@@ -2369,49 +2234,43 @@ export default function WeeklyAnalyticsPage() {
         }
 
         return sortedSnapshots[0]
-    }, [sortedSnapshots, comparisonCurrentWeek])
+    }, [sortedSnapshots, history, comparisonCurrentWeek])
 
     const previousSnapshot = useMemo(() => {
         if (!latestSnapshot) return undefined
 
         if (comparisonPreviousWeek !== "previous") {
-            return sortedSnapshots.find(
+            return history.find(
                 (snapshot) =>
+                    snapshot.id !== latestSnapshot.id &&
                     `${snapshot.year}-${snapshot.week}` ===
                     comparisonPreviousWeek
             )
         }
 
-        return sortedSnapshots.find((snapshot) => {
+        return history.find((snapshot) => {
             if (snapshot.year === latestSnapshot.year) {
                 return snapshot.week < latestSnapshot.week
             }
 
             return snapshot.year < latestSnapshot.year
         })
-    }, [sortedSnapshots, latestSnapshot, comparisonPreviousWeek])
+    }, [history, latestSnapshot, comparisonPreviousWeek])
 
     const totalCreated = snapshots.reduce(
-        (sum, snapshot) =>
-            sum + snapshot.risksCreatedThisWeek,
+        (sum, snapshot) => sum + snapshot.risksCreatedThisWeek,
         0
     )
-
     const totalClosed = snapshots.reduce(
-        (sum, snapshot) =>
-            sum + snapshot.risksClosedThisWeek,
+        (sum, snapshot) => sum + snapshot.risksClosedThisWeek,
         0
     )
-
     const totalImproved = snapshots.reduce(
-        (sum, snapshot) =>
-            sum + snapshot.risksImprovedThisWeek,
+        (sum, snapshot) => sum + snapshot.risksImprovedThisWeek,
         0
     )
-
     const totalWorsened = snapshots.reduce(
-        (sum, snapshot) =>
-            sum + snapshot.risksWorsenedThisWeek,
+        (sum, snapshot) => sum + snapshot.risksWorsenedThisWeek,
         0
     )
 
@@ -2429,9 +2288,9 @@ export default function WeeklyAnalyticsPage() {
                                 <h1 className="text-2xl font-semibold">
                                     Histórico Semanal
                                 </h1>
-
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Analise snapshots semanais, evolução das RMs, movimentações, analistas de Risk e logística.
+                                    Analise snapshots semanais, evolução das RMs,
+                                    movimentações, analistas de Risk e logística.
                                 </p>
                             </div>
 
@@ -2447,7 +2306,6 @@ export default function WeeklyAnalyticsPage() {
                                     <SelectTrigger className="w-full lg:w-[120px]">
                                         <SelectValue placeholder="Ano" />
                                     </SelectTrigger>
-
                                     <SelectContent>
                                         {(data?.filters.availableYears.length
                                             ? data.filters.availableYears
@@ -2473,12 +2331,10 @@ export default function WeeklyAnalyticsPage() {
                                     <SelectTrigger className="w-full lg:w-[170px]">
                                         <SelectValue placeholder="Mês" />
                                     </SelectTrigger>
-
                                     <SelectContent>
                                         <SelectItem value="all">
                                             Todos os meses
                                         </SelectItem>
-
                                         {(data?.filters.availableMonths || []).map(
                                             (month) => (
                                                 <SelectItem
@@ -2499,12 +2355,10 @@ export default function WeeklyAnalyticsPage() {
                                     <SelectTrigger className="w-full lg:w-[140px]">
                                         <SelectValue placeholder="Semana" />
                                     </SelectTrigger>
-
                                     <SelectContent>
                                         <SelectItem value="all">
                                             Todas as semanas
                                         </SelectItem>
-
                                         {(data?.filters.availableWeeks || []).map(
                                             (week) => (
                                                 <SelectItem
@@ -2540,45 +2394,45 @@ export default function WeeklyAnalyticsPage() {
                                 <Loader2 className="h-8 w-8 animate-spin" />
                             </div>
                         ) : !data ? (
-                            <EmptyState message="Não foi possível carregar os snapshots semanais." />
+                            <EmptyState
+                                message={
+                                    loadError ||
+                                    "Não foi possível carregar os snapshots semanais."
+                                }
+                            />
                         ) : (
                             <>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                                     <MetricCard
                                         title="RMs abertas"
                                         value={latestSnapshot?.openRisks || 0}
-                                        description="Quantidade atual no último snapshot"
+                                        description="Quantidade na semana base selecionada"
                                         icon={<BarChart3 className="h-5 w-5" />}
                                     />
-
                                     <MetricCard
                                         title="RMs Red"
                                         value={latestSnapshot?.redRisks || 0}
-                                        description="RMs críticas no último snapshot"
+                                        description="RMs críticas na semana base selecionada"
                                         icon={<ShieldAlert className="h-5 w-5" />}
                                     />
-
                                     <MetricCard
                                         title="Criadas"
                                         value={totalCreated}
                                         description="RMs criadas no período filtrado"
                                         icon={<CalendarDays className="h-5 w-5" />}
                                     />
-
                                     <MetricCard
                                         title="Fechadas"
                                         value={totalClosed}
                                         description="RMs fechadas no período filtrado"
                                         icon={<CheckCircle2 className="h-5 w-5" />}
                                     />
-
                                     <MetricCard
                                         title="Melhoraram"
                                         value={totalImproved}
                                         description="Mudanças positivas de farol"
                                         icon={<TrendingDown className="h-5 w-5" />}
                                     />
-
                                     <MetricCard
                                         title="Pioraram"
                                         value={totalWorsened}
@@ -2588,17 +2442,22 @@ export default function WeeklyAnalyticsPage() {
                                 </div>
 
                                 <WeeklyComparisonSelector
-                                    snapshots={snapshots}
+                                    snapshots={history}
+                                    currentKey={
+                                        latestSnapshot
+                                            ? `${latestSnapshot.year}-${latestSnapshot.week}`
+                                            : undefined
+                                    }
                                     currentValue={comparisonCurrentWeek}
                                     previousValue={comparisonPreviousWeek}
-                                    onCurrentChange={setComparisonCurrentWeek}
+                                    onCurrentChange={(value) => {
+                                        setComparisonCurrentWeek(value)
+                                        setComparisonPreviousWeek("previous")
+                                    }}
                                     onPreviousChange={setComparisonPreviousWeek}
                                 />
 
-                                <Tabs
-                                    defaultValue="executive"
-                                    className="w-full"
-                                >
+                                <Tabs defaultValue="executive" className="w-full">
                                     <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:px-0">
                                         <TabsList className="flex h-12 w-max min-w-full justify-start gap-1 sm:w-full sm:flex-wrap">
                                             <TabsTrigger
@@ -2607,21 +2466,18 @@ export default function WeeklyAnalyticsPage() {
                                             >
                                                 Visão executiva
                                             </TabsTrigger>
-
                                             <TabsTrigger
                                                 value="evolution"
                                                 className="whitespace-nowrap"
                                             >
                                                 Evolução
                                             </TabsTrigger>
-
                                             <TabsTrigger
                                                 value="rankings"
                                                 className="whitespace-nowrap"
                                             >
                                                 Rankings
                                             </TabsTrigger>
-
                                             <TabsTrigger
                                                 value="details"
                                                 className="whitespace-nowrap"
@@ -2657,12 +2513,11 @@ export default function WeeklyAnalyticsPage() {
                                                     <CardTitle>
                                                         Comparativo visual
                                                     </CardTitle>
-
                                                     <CardDescription>
-                                                        Comparação direta entre a semana base e a semana escolhida.
+                                                        Comparação direta entre a semana
+                                                        base e a semana escolhida.
                                                     </CardDescription>
                                                 </CardHeader>
-
                                                 <CardContent>
                                                     <WeeklyComparisonBarChart
                                                         current={latestSnapshot}
@@ -2673,26 +2528,20 @@ export default function WeeklyAnalyticsPage() {
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent
-                                        value="evolution"
-                                        className="mt-4"
-                                    >
+                                    <TabsContent value="evolution" className="mt-4">
                                         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                                             <Card>
                                                 <CardHeader>
                                                     <CardTitle>
                                                         Evolução semanal das RMs
                                                     </CardTitle>
-
                                                     <CardDescription>
-                                                        Acompanhe RMs abertas, Red, Yellow e Green ao longo das semanas.
+                                                        Acompanhe RMs abertas, Red,
+                                                        Yellow e Green ao longo das semanas.
                                                     </CardDescription>
                                                 </CardHeader>
-
                                                 <CardContent>
-                                                    <WeeklyEvolutionChart
-                                                        snapshots={snapshots}
-                                                    />
+                                                    <WeeklyEvolutionChart snapshots={snapshots} />
                                                 </CardContent>
                                             </Card>
 
@@ -2701,12 +2550,11 @@ export default function WeeklyAnalyticsPage() {
                                                     <CardTitle>
                                                         Distribuição do último snapshot
                                                     </CardTitle>
-
                                                     <CardDescription>
-                                                        Visão por farol da semana mais recente selecionada.
+                                                        Visão por farol da semana
+                                                        mais recente selecionada.
                                                     </CardDescription>
                                                 </CardHeader>
-
                                                 <CardContent>
                                                     <RiskDistributionChart
                                                         snapshot={latestSnapshot}
@@ -2719,16 +2567,13 @@ export default function WeeklyAnalyticsPage() {
                                                     <CardTitle>
                                                         RMs criadas vs fechadas
                                                     </CardTitle>
-
                                                     <CardDescription>
-                                                        Comparativo semanal de entrada e saída de RMs.
+                                                        Comparativo semanal de entrada
+                                                        e saída de RMs.
                                                     </CardDescription>
                                                 </CardHeader>
-
                                                 <CardContent>
-                                                    <CreatedClosedChart
-                                                        snapshots={snapshots}
-                                                    />
+                                                    <CreatedClosedChart snapshots={snapshots} />
                                                 </CardContent>
                                             </Card>
 
@@ -2737,25 +2582,19 @@ export default function WeeklyAnalyticsPage() {
                                                     <CardTitle>
                                                         RMs que melhoraram vs pioraram
                                                     </CardTitle>
-
                                                     <CardDescription>
-                                                        Mudanças de farol detectadas nos snapshots.
+                                                        Mudanças de farol detectadas
+                                                        nos snapshots.
                                                     </CardDescription>
                                                 </CardHeader>
-
                                                 <CardContent>
-                                                    <ImprovedWorsenedChart
-                                                        snapshots={snapshots}
-                                                    />
+                                                    <ImprovedWorsenedChart snapshots={snapshots} />
                                                 </CardContent>
                                             </Card>
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent
-                                        value="rankings"
-                                        className="mt-4"
-                                    >
+                                    <TabsContent value="rankings" className="mt-4">
                                         <RankingCards
                                             riskAnalystSnapshots={data.riskAnalystSnapshots}
                                             logisticsSnapshots={data.logisticsSnapshots}
@@ -2763,127 +2602,109 @@ export default function WeeklyAnalyticsPage() {
                                         />
                                     </TabsContent>
 
-                                    <TabsContent
-                                        value="details"
-                                        className="mt-4"
-                                    >
-                                    <Tabs defaultValue="snapshots">
-                                        <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:px-0">
-                                            <TabsList className="flex h-12 w-max min-w-full justify-start gap-1 sm:w-full sm:flex-wrap">
-                                                <TabsTrigger
-                                                    value="snapshots"
-                                                    className="whitespace-nowrap"
-                                                >
-                                                    Snapshots
-                                                </TabsTrigger>
-    
-                                                <TabsTrigger
-                                                    value="risk"
-                                                    className="whitespace-nowrap"
-                                                >
-                                                    Analistas de Risk
-                                                </TabsTrigger>
-    
-                                                <TabsTrigger
-                                                    value="logistics"
-                                                    className="whitespace-nowrap"
-                                                >
-                                                    Logística
-                                                </TabsTrigger>
-    
-                                                <TabsTrigger
-                                                    value="events"
-                                                    className="whitespace-nowrap"
-                                                >
-                                                    Eventos da semana
-                                                </TabsTrigger>
-                                            </TabsList>
-                                        </div>
-    
-                                        <TabsContent value="snapshots" className="mt-4">
-                                            <Card>
-                                                <CardHeader>
-                                                    <CardTitle>
-                                                        Snapshots semanais
-                                                    </CardTitle>
-    
-                                                    <CardDescription>
-                                                        Visão agregada das RMs, PNs, planos de ação e logística por semana.
-                                                    </CardDescription>
-                                                </CardHeader>
-    
-                                                <CardContent>
-                                                    <SnapshotsTable
-                                                        snapshots={snapshots}
-                                                    />
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-    
-                                        <TabsContent value="risk" className="mt-4">
-                                            <Card>
-                                                <CardHeader>
-                                                    <CardTitle>
-                                                        Histórico por analista de Risk
-                                                    </CardTitle>
-    
-                                                    <CardDescription>
-                                                        Carga de RMs, farol, movimentações e planos de ação por responsável.
-                                                    </CardDescription>
-                                                </CardHeader>
-    
-                                                <CardContent>
-                                                    <RiskAnalystTable
-                                                        snapshots={
-                                                            data.riskAnalystSnapshots
-                                                        }
-                                                    />
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-    
-                                        <TabsContent value="logistics" className="mt-4">
-                                            <Card>
-                                                <CardHeader>
-                                                    <CardTitle>
-                                                        Histórico por logística
-                                                    </CardTitle>
-    
-                                                    <CardDescription>
-                                                        Solicitações pendentes, em análise, aprovadas, rejeitadas e tempo médio.
-                                                    </CardDescription>
-                                                </CardHeader>
-    
-                                                <CardContent>
-                                                    <LogisticsTable
-                                                        snapshots={
-                                                            data.logisticsSnapshots
-                                                        }
-                                                    />
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-    
-                                        <TabsContent value="events" className="mt-4">
-                                            <Card>
-                                                <CardHeader>
-                                                    <CardTitle>
-                                                        Eventos e movimentações
-                                                    </CardTitle>
-    
-                                                    <CardDescription>
-                                                        Detalhes das RMs criadas, fechadas, atribuídas e mudanças de farol.
-                                                    </CardDescription>
-                                                </CardHeader>
-    
-                                                <CardContent>
-                                                    <EventsTable
-                                                        events={data.events}
-                                                    />
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-                                    </Tabs>
+                                    <TabsContent value="details" className="mt-4">
+                                        <Tabs defaultValue="snapshots">
+                                            <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:px-0">
+                                                <TabsList className="flex h-12 w-max min-w-full justify-start gap-1 sm:w-full sm:flex-wrap">
+                                                    <TabsTrigger
+                                                        value="snapshots"
+                                                        className="whitespace-nowrap"
+                                                    >
+                                                        Snapshots
+                                                    </TabsTrigger>
+                                                    <TabsTrigger
+                                                        value="risk"
+                                                        className="whitespace-nowrap"
+                                                    >
+                                                        Analistas de Risk
+                                                    </TabsTrigger>
+                                                    <TabsTrigger
+                                                        value="logistics"
+                                                        className="whitespace-nowrap"
+                                                    >
+                                                        Logística
+                                                    </TabsTrigger>
+                                                    <TabsTrigger
+                                                        value="events"
+                                                        className="whitespace-nowrap"
+                                                    >
+                                                        Eventos da semana
+                                                    </TabsTrigger>
+                                                </TabsList>
+                                            </div>
+
+                                            <TabsContent value="snapshots" className="mt-4">
+                                                <Card>
+                                                    <CardHeader>
+                                                        <CardTitle>
+                                                            Snapshots semanais
+                                                        </CardTitle>
+                                                        <CardDescription>
+                                                            Visão agregada das RMs, PNs,
+                                                            planos de ação e logística por semana.
+                                                        </CardDescription>
+                                                    </CardHeader>
+                                                    <CardContent>
+                                                        <SnapshotsTable snapshots={snapshots} />
+                                                    </CardContent>
+                                                </Card>
+                                            </TabsContent>
+
+                                            <TabsContent value="risk" className="mt-4">
+                                                <Card>
+                                                    <CardHeader>
+                                                        <CardTitle>
+                                                            Histórico por analista de Risk
+                                                        </CardTitle>
+                                                        <CardDescription>
+                                                            Carga de RMs, farol, movimentações
+                                                            e planos de ação por responsável.
+                                                        </CardDescription>
+                                                    </CardHeader>
+                                                    <CardContent>
+                                                        <RiskAnalystTable
+                                                            snapshots={data.riskAnalystSnapshots}
+                                                        />
+                                                    </CardContent>
+                                                </Card>
+                                            </TabsContent>
+
+                                            <TabsContent value="logistics" className="mt-4">
+                                                <Card>
+                                                    <CardHeader>
+                                                        <CardTitle>
+                                                            Histórico por logística
+                                                        </CardTitle>
+                                                        <CardDescription>
+                                                            Solicitações pendentes, em análise,
+                                                            aprovadas, rejeitadas e tempo médio.
+                                                        </CardDescription>
+                                                    </CardHeader>
+                                                    <CardContent>
+                                                        <LogisticsTable
+                                                            snapshots={data.logisticsSnapshots}
+                                                        />
+                                                    </CardContent>
+                                                </Card>
+                                            </TabsContent>
+
+                                            <TabsContent value="events" className="mt-4">
+                                                <Card>
+                                                    <CardHeader>
+                                                        <CardTitle>
+                                                            Eventos e movimentações
+                                                        </CardTitle>
+                                                        <CardDescription>
+                                                            Detalhes das RMs criadas,
+                                                            fechadas, atribuídas e mudanças de farol.
+                                                        </CardDescription>
+                                                    </CardHeader>
+                                                    <CardContent>
+                                                        <EventsTable events={data.events} />
+                                                    </CardContent>
+                                                </Card>
+                                            </TabsContent>
+                                        </Tabs>
                                     </TabsContent>
                                 </Tabs>
                             </>
@@ -2901,9 +2722,7 @@ function SnapshotsTable({
     snapshots: WeeklySnapshot[]
 }) {
     if (snapshots.length === 0) {
-        return (
-            <EmptyState message="Nenhum snapshot encontrado." />
-        )
+        return <EmptyState message="Nenhum snapshot encontrado." />
     }
 
     return (
@@ -2913,6 +2732,7 @@ function SnapshotsTable({
                     <TableRow>
                         <TableHead>Semana</TableHead>
                         <TableHead>Período</TableHead>
+                        <TableHead>Gerado em</TableHead>
                         <TableHead>Total RMs</TableHead>
                         <TableHead>Abertas</TableHead>
                         <TableHead>Fechadas</TableHead>
@@ -2934,65 +2754,37 @@ function SnapshotsTable({
                             <TableCell className="font-medium">
                                 CW{snapshot.week} / {snapshot.year}
                             </TableCell>
-
                             <TableCell>
                                 {formatDate(snapshot.weekStartDate)} até{" "}
                                 {formatDate(snapshot.weekEndDate)}
                             </TableCell>
-
-                            <TableCell>
-                                {snapshot.totalRisks}
+                            <TableCell className="whitespace-nowrap">
+                                {formatDateTime(snapshot.snapshotDate)}
                             </TableCell>
-
-                            <TableCell>
-                                {snapshot.openRisks}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.closedRisks}
-                            </TableCell>
-
+                            <TableCell>{snapshot.totalRisks}</TableCell>
+                            <TableCell>{snapshot.openRisks}</TableCell>
+                            <TableCell>{snapshot.closedRisks}</TableCell>
                             <TableCell>
                                 <Badge variant="destructive">
                                     {snapshot.redRisks}
                                 </Badge>
                             </TableCell>
-
                             <TableCell>
                                 <Badge className="bg-yellow-500 text-black">
                                     {snapshot.yellowRisks}
                                 </Badge>
                             </TableCell>
-
                             <TableCell>
                                 <Badge className="bg-green-600">
                                     {snapshot.greenRisks}
                                 </Badge>
                             </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksCreatedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksClosedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksImprovedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksWorsenedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.overdueActionPlans}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.pendingLogisticsRequests}
-                            </TableCell>
+                            <TableCell>{snapshot.risksCreatedThisWeek}</TableCell>
+                            <TableCell>{snapshot.risksClosedThisWeek}</TableCell>
+                            <TableCell>{snapshot.risksImprovedThisWeek}</TableCell>
+                            <TableCell>{snapshot.risksWorsenedThisWeek}</TableCell>
+                            <TableCell>{snapshot.overdueActionPlans}</TableCell>
+                            <TableCell>{snapshot.pendingLogisticsRequests}</TableCell>
                         </TableRow>
                     ))}
                 </TableBody>
@@ -3041,73 +2833,40 @@ function RiskAnalystTable({
                             <TableCell className="font-medium">
                                 CW{snapshot.week} / {snapshot.year}
                             </TableCell>
-
                             <TableCell>
                                 <div>
                                     <p className="font-medium">
                                         {snapshot.user?.name || "Usuário não encontrado"}
                                     </p>
-
                                     <p className="text-xs text-muted-foreground">
                                         {snapshot.user?.email}
                                     </p>
                                 </div>
                             </TableCell>
-
-                            <TableCell>
-                                {snapshot.assignedRisks}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.openRisks}
-                            </TableCell>
-
+                            <TableCell>{snapshot.assignedRisks}</TableCell>
+                            <TableCell>{snapshot.openRisks}</TableCell>
                             <TableCell>
                                 <Badge variant="destructive">
                                     {snapshot.redRisks}
                                 </Badge>
                             </TableCell>
-
                             <TableCell>
                                 <Badge className="bg-yellow-500 text-black">
                                     {snapshot.yellowRisks}
                                 </Badge>
                             </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksCreatedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksAssignedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksClosedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksImprovedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.risksWorsenedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.actionPlansOpen}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.actionPlansOverdue}
-                            </TableCell>
-
+                            <TableCell>{snapshot.risksCreatedThisWeek}</TableCell>
+                            <TableCell>{snapshot.risksAssignedThisWeek}</TableCell>
+                            <TableCell>{snapshot.risksClosedThisWeek}</TableCell>
+                            <TableCell>{snapshot.risksImprovedThisWeek}</TableCell>
+                            <TableCell>{snapshot.risksWorsenedThisWeek}</TableCell>
+                            <TableCell>{snapshot.actionPlansOpen}</TableCell>
+                            <TableCell>{snapshot.actionPlansOverdue}</TableCell>
                             <TableCell>
                                 {snapshot.oldestOpenRiskDays !== null
                                     ? `${snapshot.oldestOpenRiskDays} dias`
                                     : "-"}
                             </TableCell>
-
                             <TableCell>
                                 {snapshot.avgResolutionDays !== null
                                     ? `${formatNumber(snapshot.avgResolutionDays)} dias`
@@ -3158,57 +2917,29 @@ function LogisticsTable({
                             <TableCell className="font-medium">
                                 CW{snapshot.week} / {snapshot.year}
                             </TableCell>
-
                             <TableCell>
                                 <div>
                                     <p className="font-medium">
                                         {snapshot.user?.name || "Usuário não encontrado"}
                                     </p>
-
                                     <p className="text-xs text-muted-foreground">
                                         {snapshot.user?.email}
                                     </p>
                                 </div>
                             </TableCell>
-
-                            <TableCell>
-                                {snapshot.assignedRequests}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.pendingRequests}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.inReviewRequests}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.approvedRequests}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.rejectedRequests}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.requestsReceivedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.requestsApprovedThisWeek}
-                            </TableCell>
-
-                            <TableCell>
-                                {snapshot.requestsRejectedThisWeek}
-                            </TableCell>
-
+                            <TableCell>{snapshot.assignedRequests}</TableCell>
+                            <TableCell>{snapshot.pendingRequests}</TableCell>
+                            <TableCell>{snapshot.inReviewRequests}</TableCell>
+                            <TableCell>{snapshot.approvedRequests}</TableCell>
+                            <TableCell>{snapshot.rejectedRequests}</TableCell>
+                            <TableCell>{snapshot.requestsReceivedThisWeek}</TableCell>
+                            <TableCell>{snapshot.requestsApprovedThisWeek}</TableCell>
+                            <TableCell>{snapshot.requestsRejectedThisWeek}</TableCell>
                             <TableCell>
                                 {snapshot.oldestPendingRequestDays !== null
                                     ? `${snapshot.oldestPendingRequestDays} dias`
                                     : "-"}
                             </TableCell>
-
                             <TableCell>
                                 {snapshot.avgReviewDays !== null
                                     ? `${formatNumber(snapshot.avgReviewDays)} dias`
@@ -3222,15 +2953,9 @@ function LogisticsTable({
     )
 }
 
-function EventsTable({
-    events,
-}: {
-    events: WeeklyEvent[]
-}) {
+function EventsTable({ events }: { events: WeeklyEvent[] }) {
     if (events.length === 0) {
-        return (
-            <EmptyState message="Nenhum evento semanal encontrado." />
-        )
+        return <EmptyState message="Nenhum evento semanal encontrado." />
     }
 
     return (
@@ -3254,22 +2979,18 @@ function EventsTable({
                             <TableCell>
                                 {formatDateTime(event.createdAt)}
                             </TableCell>
-
                             <TableCell className="font-medium">
                                 CW{event.week} / {event.year}
                             </TableCell>
-
                             <TableCell>
                                 {getEventBadge(event.eventType)}
                             </TableCell>
-
                             <TableCell>
                                 {event.riskEvent ? (
                                     <div>
                                         <p className="font-medium">
                                             {event.riskEvent.code || "-"}
                                         </p>
-
                                         <p className="line-clamp-1 text-xs text-muted-foreground">
                                             {event.riskEvent.title}
                                         </p>
@@ -3278,24 +2999,22 @@ function EventsTable({
                                     "-"
                                 )}
                             </TableCell>
-
                             <TableCell>
                                 {event.oldValue || event.newValue ? (
                                     <span>
-                                        {event.oldValue || "-"} → {event.newValue || "-"}
+                                        {event.oldValue || "-"} →{" "}
+                                        {event.newValue || "-"}
                                     </span>
                                 ) : (
                                     "-"
                                 )}
                             </TableCell>
-
                             <TableCell>
                                 {event.user ? (
                                     <div>
                                         <p className="font-medium">
                                             {event.user.name}
                                         </p>
-
                                         <p className="text-xs text-muted-foreground">
                                             {event.user.email}
                                         </p>
@@ -3304,7 +3023,6 @@ function EventsTable({
                                     "-"
                                 )}
                             </TableCell>
-
                             <TableCell>
                                 <span className="line-clamp-2">
                                     {event.description || "-"}
