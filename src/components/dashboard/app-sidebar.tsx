@@ -44,11 +44,11 @@ type RoleRule = string | string[]
 type RoleLike =
   | string
   | {
+    name?: string
+    role?: {
       name?: string
-      role?: {
-        name?: string
-      }
     }
+  }
 
 type NavItem = {
   title: string
@@ -256,6 +256,13 @@ export function AppSidebar({
             icon: IconHistory,
             permission: "AUDIT_LOG_VIEW",
           },
+          {
+            title: "Histórico de IA",
+            url: "/admin/ai-history",
+            icon: IconHistory,
+            role: "ADMIN",
+          },
+
         ],
       },
     ] satisfies NavItem[],

@@ -142,6 +142,7 @@ export function SupplierAIAnalysis({
                                 gere novamente após alterações.
                             </p>
 
+
                             <p className="text-sm">
                                 {result.analysis.summary}
                             </p>

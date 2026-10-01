@@ -3,6 +3,11 @@ import { createHash } from "node:crypto"
 import { GET as getSupplier } from "../route"
 
 import {
+    createAIHistoryStore,
+    findSavedAnalysis,
+} from "@/lib/ai-history"
+
+import {
     getUserFromRequest,
 } from "@/app/api/lib/getUserFromToken"
 
@@ -125,7 +130,10 @@ async function runAnalysis(
             )
             .digest("hex")
 
-        const cached = cache.get(hash)
+        const cached = await findSavedAnalysis(
+            model,
+            evidence
+        )
 
         if (cached) {
             return json({
@@ -273,13 +281,12 @@ export async function POST(
 
     return auditAIRequest({
         request,
-
         entityType: "Supplier",
         entityId: id,
-
         userId: user?.id ?? null,
         model: process.env.OPENAI_MODEL,
         scope: "supplier",
+        historyStore: createAIHistoryStore(prisma),
 
         write: (entry) =>
             createAuditLog(prisma, entry),

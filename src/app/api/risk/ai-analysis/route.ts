@@ -5,6 +5,11 @@ import { prisma } from "@/app/api/lib/prisma"
 import { auditAIRequest } from "@/lib/ai-audit"
 
 import {
+    createAIHistoryStore,
+    findSavedAnalysis,
+} from "@/lib/ai-history"
+
+import {
     createAuditLog,
 } from "@/app/api/lib/createAuditLog"
 
@@ -208,7 +213,10 @@ async function runAnalysis(request: Request) {
             )
             .digest("hex")
 
-        const cached = cache.get(hash)
+        const cached = await findSavedAnalysis(
+            model,
+            evidence
+        )
 
         if (cached) {
             return json({
@@ -320,17 +328,15 @@ export async function POST(request: Request) {
 
     return auditAIRequest({
         request,
-
         entityType: "RiskPortfolio",
-
         entityId:
             scope === "mine"
                 ? user?.id ?? "anonymous"
                 : "all",
-
         userId: user?.id ?? null,
         model: process.env.OPENAI_MODEL,
         scope,
+        historyStore: createAIHistoryStore(prisma),
 
         write: (entry) =>
             createAuditLog(prisma, entry),

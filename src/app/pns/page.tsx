@@ -12,6 +12,10 @@ import {
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 
 import {
+    PNAIAnalysis,
+} from "@/components/pns/pn-ai-analysis"
+
+import {
     Card,
     CardContent,
     CardDescription,
@@ -1032,37 +1036,37 @@ export default function PartNumbersPage() {
         status: PartNumberOverviewItem["analysis"]["operationalStatus"]
         description: string
     }[] = [
-        {
-            status: "IMMEDIATE_ACTION",
-            description:
-                "PN vermelho, PN amarelo sem plano, plano atrasado ou solicitação logística rejeitada.",
-        },
-        {
-            status: "ATTENTION",
-            description:
-                "PN amarelo com plano de ação ou PN verde sem nenhum plano relacionado.",
-        },
-        {
-            status: "WAITING_LOGISTICS",
-            description:
-                "Solicitação enviada ou atualmente em análise pela Logística.",
-        },
-        {
-            status: "REGISTRATION_ADJUSTMENT",
-            description:
-                "Ausência de responsável ou aplicação ativa.",
-        },
-        {
-            status: "MONITORING",
-            description:
-                "PN verde com plano de ação e sem outra pendência de maior precedência.",
-        },
-        {
-            status: "COMPLETED",
-            description:
-                "PN concluído, identificado pelo status Blue.",
-        },
-    ]
+            {
+                status: "IMMEDIATE_ACTION",
+                description:
+                    "PN vermelho, PN amarelo sem plano, plano atrasado ou solicitação logística rejeitada.",
+            },
+            {
+                status: "ATTENTION",
+                description:
+                    "PN amarelo com plano de ação ou PN verde sem nenhum plano relacionado.",
+            },
+            {
+                status: "WAITING_LOGISTICS",
+                description:
+                    "Solicitação enviada ou atualmente em análise pela Logística.",
+            },
+            {
+                status: "REGISTRATION_ADJUSTMENT",
+                description:
+                    "Ausência de responsável ou aplicação ativa.",
+            },
+            {
+                status: "MONITORING",
+                description:
+                    "PN verde com plano de ação e sem outra pendência de maior precedência.",
+            },
+            {
+                status: "COMPLETED",
+                description:
+                    "PN concluído, identificado pelo status Blue.",
+            },
+        ]
 
     return (
         <ProtectedRoute permission="RISK_VIEW">
@@ -1117,6 +1121,8 @@ export default function PartNumbersPage() {
                             </CardContent>
                         </Card>
 
+                        <PNAIAnalysis />
+
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             <SummaryCard
                                 title="PNs monitorados"
@@ -1166,200 +1172,200 @@ export default function PartNumbersPage() {
 
                         <div className="grid items-start gap-4 xl:grid-cols-12">
                             <div className="space-y-4 xl:col-span-7">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>
-                                        Distribuição do portfólio
-                                    </CardTitle>
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>
+                                            Distribuição do portfólio
+                                        </CardTitle>
 
-                                    <CardDescription>
-                                        Status consolidado dos PNs dentro do recorte atual.
-                                        Clique em uma categoria para filtrar.
-                                    </CardDescription>
-                                </CardHeader>
+                                        <CardDescription>
+                                            Status consolidado dos PNs dentro do recorte atual.
+                                            Clique em uma categoria para filtrar.
+                                        </CardDescription>
+                                    </CardHeader>
 
-                                <CardContent className="space-y-5">
-                                    <div className="flex h-3 overflow-hidden rounded-full bg-muted">
-                                        {statusDistribution.map((item) =>
-                                            item.value > 0 ? (
-                                                <div
-                                                    key={item.status}
-                                                    className={item.barClassName}
-                                                    style={{
-                                                        width:
-                                                            String(
-                                                                getPercentage(
-                                                                    item.value,
-                                                                    stats.totalPartNumbers
-                                                                )
-                                                            ) + "%",
-                                                    }}
-                                                    title={
-                                                        item.label +
-                                                        ": " +
-                                                        item.value
-                                                    }
-                                                />
-                                            ) : null
-                                        )}
-                                    </div>
-
-                                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                                        {statusDistribution.map((item) => (
-                                            <button
-                                                key={item.status}
-                                                type="button"
-                                                onClick={() =>
-                                                    applyPreset({
-                                                        status: item.status,
-                                                    })
-                                                }
-                                                className="flex items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-muted/50"
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span
-                                                        className={
-                                                            "h-2.5 w-2.5 rounded-full " +
-                                                            item.barClassName
+                                    <CardContent className="space-y-5">
+                                        <div className="flex h-3 overflow-hidden rounded-full bg-muted">
+                                            {statusDistribution.map((item) =>
+                                                item.value > 0 ? (
+                                                    <div
+                                                        key={item.status}
+                                                        className={item.barClassName}
+                                                        style={{
+                                                            width:
+                                                                String(
+                                                                    getPercentage(
+                                                                        item.value,
+                                                                        stats.totalPartNumbers
+                                                                    )
+                                                                ) + "%",
+                                                        }}
+                                                        title={
+                                                            item.label +
+                                                            ": " +
+                                                            item.value
                                                         }
                                                     />
+                                                ) : null
+                                            )}
+                                        </div>
 
-                                                    <span className="text-sm">
+                                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                            {statusDistribution.map((item) => (
+                                                <button
+                                                    key={item.status}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        applyPreset({
+                                                            status: item.status,
+                                                        })
+                                                    }
+                                                    className="flex items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-muted/50"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span
+                                                            className={
+                                                                "h-2.5 w-2.5 rounded-full " +
+                                                                item.barClassName
+                                                            }
+                                                        />
+
+                                                        <span className="text-sm">
+                                                            {item.label}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="text-right">
+                                                        <p className="font-semibold">
+                                                            {item.value}
+                                                        </p>
+
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {getPercentage(
+                                                                item.value,
+                                                                stats.totalPartNumbers
+                                                            )}%
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {stats.statusDistribution.withoutStatus > 0 && (
+                                            <p className="text-xs text-muted-foreground">
+                                                {stats.statusDistribution.withoutStatus} PN(s)
+                                                ainda estão sem status consolidado.
+                                            </p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader>
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <Truck className="h-5 w-5" />
+                                                    Distribuição dos PNs dentro da Logística
+                                                </CardTitle>
+
+                                                <CardDescription className="mt-1">
+                                                    Situação logística consolidada dos PNs no recorte atual.
+                                                    Clique em uma categoria para filtrar a fila.
+                                                </CardDescription>
+                                            </div>
+
+                                            <Badge variant="outline">
+                                                {stats.logisticsDistribution.requested +
+                                                    stats.logisticsDistribution.inLogistics} em andamento
+                                            </Badge>
+                                        </div>
+                                    </CardHeader>
+
+                                    <CardContent className="space-y-5">
+                                        <div className="flex h-3 overflow-hidden rounded-full bg-muted">
+                                            {logisticsDistribution.map((item) =>
+                                                item.value > 0 ? (
+                                                    <div
+                                                        key={item.status}
+                                                        className={item.barClassName}
+                                                        style={{
+                                                            width:
+                                                                String(
+                                                                    getPercentage(
+                                                                        item.value,
+                                                                        stats.totalPartNumbers
+                                                                    )
+                                                                ) + "%",
+                                                        }}
+                                                        title={
+                                                            item.label +
+                                                            ": " +
+                                                            item.value
+                                                        }
+                                                    />
+                                                ) : null
+                                            )}
+                                        </div>
+
+                                        <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-5">
+                                            {logisticsDistribution.map((item) => (
+                                                <button
+                                                    key={item.status}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        applyPreset({
+                                                            logisticsStatus:
+                                                                item.status,
+                                                        })
+                                                    }
+                                                    className="rounded-lg border p-3 text-left transition-colors hover:bg-muted/50"
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span
+                                                            className={
+                                                                "h-2.5 w-2.5 rounded-full " +
+                                                                item.barClassName
+                                                            }
+                                                        />
+
+                                                        <span className="text-lg font-semibold">
+                                                            {item.value}
+                                                        </span>
+                                                    </div>
+
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={
+                                                            "mt-3 " +
+                                                            item.badgeClassName
+                                                        }
+                                                    >
                                                         {item.label}
-                                                    </span>
-                                                </div>
+                                                    </Badge>
 
-                                                <div className="text-right">
-                                                    <p className="font-semibold">
-                                                        {item.value}
+                                                    <p className="mt-2 text-xs text-muted-foreground">
+                                                        {item.description}
                                                     </p>
 
-                                                    <p className="text-xs text-muted-foreground">
+                                                    <p className="mt-2 text-xs font-medium">
                                                         {getPercentage(
                                                             item.value,
                                                             stats.totalPartNumbers
-                                                        )}%
+                                                        )}% do portfólio
                                                     </p>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {stats.statusDistribution.withoutStatus > 0 && (
-                                        <p className="text-xs text-muted-foreground">
-                                            {stats.statusDistribution.withoutStatus} PN(s)
-                                            ainda estão sem status consolidado.
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <Truck className="h-5 w-5" />
-                                                Distribuição dos PNs dentro da Logística
-                                            </CardTitle>
-
-                                            <CardDescription className="mt-1">
-                                                Situação logística consolidada dos PNs no recorte atual.
-                                                Clique em uma categoria para filtrar a fila.
-                                            </CardDescription>
+                                                </button>
+                                            ))}
                                         </div>
 
-                                        <Badge variant="outline">
-                                            {stats.logisticsDistribution.requested +
-                                                stats.logisticsDistribution.inLogistics} em andamento
-                                        </Badge>
-                                    </div>
-                                </CardHeader>
-
-                                <CardContent className="space-y-5">
-                                    <div className="flex h-3 overflow-hidden rounded-full bg-muted">
-                                        {logisticsDistribution.map((item) =>
-                                            item.value > 0 ? (
-                                                <div
-                                                    key={item.status}
-                                                    className={item.barClassName}
-                                                    style={{
-                                                        width:
-                                                            String(
-                                                                getPercentage(
-                                                                    item.value,
-                                                                    stats.totalPartNumbers
-                                                                )
-                                                            ) + "%",
-                                                    }}
-                                                    title={
-                                                        item.label +
-                                                        ": " +
-                                                        item.value
-                                                    }
-                                                />
-                                            ) : null
+                                        {stats.logisticsDistribution.withoutStatus > 0 && (
+                                            <p className="text-xs text-muted-foreground">
+                                                {stats.logisticsDistribution.withoutStatus} PN(s)
+                                                sem situação logística definida.
+                                            </p>
                                         )}
-                                    </div>
-
-                                    <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-5">
-                                        {logisticsDistribution.map((item) => (
-                                            <button
-                                                key={item.status}
-                                                type="button"
-                                                onClick={() =>
-                                                    applyPreset({
-                                                        logisticsStatus:
-                                                            item.status,
-                                                    })
-                                                }
-                                                className="rounded-lg border p-3 text-left transition-colors hover:bg-muted/50"
-                                            >
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span
-                                                        className={
-                                                            "h-2.5 w-2.5 rounded-full " +
-                                                            item.barClassName
-                                                        }
-                                                    />
-
-                                                    <span className="text-lg font-semibold">
-                                                        {item.value}
-                                                    </span>
-                                                </div>
-
-                                                <Badge
-                                                    variant="outline"
-                                                    className={
-                                                        "mt-3 " +
-                                                        item.badgeClassName
-                                                    }
-                                                >
-                                                    {item.label}
-                                                </Badge>
-
-                                                <p className="mt-2 text-xs text-muted-foreground">
-                                                    {item.description}
-                                                </p>
-
-                                                <p className="mt-2 text-xs font-medium">
-                                                    {getPercentage(
-                                                        item.value,
-                                                        stats.totalPartNumbers
-                                                    )}% do portfólio
-                                                </p>
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {stats.logisticsDistribution.withoutStatus > 0 && (
-                                        <p className="text-xs text-muted-foreground">
-                                            {stats.logisticsDistribution.withoutStatus} PN(s)
-                                            sem situação logística definida.
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
+                                    </CardContent>
+                                </Card>
                             </div>
 
                             <Card className="xl:col-span-5">
@@ -2195,10 +2201,10 @@ export default function PartNumbersPage() {
 
                                                                         {part.analysis
                                                                             .withoutActiveVehicleApplication && (
-                                                                            <Badge variant="secondary">
-                                                                                Sem aplicação ativa
-                                                                            </Badge>
-                                                                        )}
+                                                                                <Badge variant="secondary">
+                                                                                    Sem aplicação ativa
+                                                                                </Badge>
+                                                                            )}
                                                                     </div>
                                                                 </td>
 
@@ -2291,7 +2297,7 @@ export default function PartNumbersPage() {
                                                                                 </p>
 
                                                                                 {part.analysis.operationalReasons.length ===
-                                                                                0 ? (
+                                                                                    0 ? (
                                                                                     <div className="flex items-center gap-2 text-sm text-green-600">
                                                                                         <CheckCircle2 className="h-4 w-4" />
                                                                                         Nenhuma pendência relevante
@@ -2392,7 +2398,7 @@ export default function PartNumbersPage() {
                                             disabled={
                                                 loading ||
                                                 pagination.page >=
-                                                    pagination.totalPages
+                                                pagination.totalPages
                                             }
                                             onClick={() =>
                                                 goToPage(pagination.page + 1)
