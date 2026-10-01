@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
+import { aggregateSupplierWeeks } from "@/lib/supplier-360"
 
 type Params = {
     params: Promise<{
@@ -191,10 +192,10 @@ function maxOrNull(values: number[]) {
 function formatUser(
     user:
         | {
-              id: string
-              name: string
-              email: string
-          }
+            id: string
+            name: string
+            email: string
+        }
         | null
         | undefined
 ) {
@@ -774,6 +775,48 @@ export async function GET(
             )
         }
 
+        const snapshotWeeks =
+            await prisma.weeklyRiskStateSnapshot.findMany({
+                where: {
+                    supplierId: id,
+                },
+
+                distinct: ["year", "week"],
+
+                select: {
+                    year: true,
+                    week: true,
+                },
+
+                orderBy: [
+                    { year: "desc" },
+                    { week: "desc" },
+                ],
+
+                take: 12,
+            })
+
+        const weeklyRows =
+            snapshotWeeks.length > 0
+                ? await prisma.weeklyRiskStateSnapshot.findMany({
+                    where: {
+                        supplierId: id,
+                        OR: snapshotWeeks,
+                    },
+
+                    select: {
+                        year: true,
+                        week: true,
+                        weekStartDate: true,
+                        workflowStatus: true,
+                        riskLevel: true,
+                    },
+                })
+                : []
+
+        const weeklyHistory =
+            aggregateSupplierWeeks(weeklyRows)
+
         const analytics = buildSupplierAnalytics(supplier)
 
         return NextResponse.json({
@@ -790,10 +833,10 @@ export async function GET(
 
             country: supplier.country
                 ? {
-                      id: supplier.country.id,
-                      name: supplier.country.name,
-                      isoCode: supplier.country.isoCode,
-                  }
+                    id: supplier.country.id,
+                    name: supplier.country.name,
+                    isoCode: supplier.country.isoCode,
+                }
                 : null,
 
             contacts: supplier.contacts.map((contact) => ({
@@ -806,6 +849,7 @@ export async function GET(
             })),
 
             analytics,
+            weeklyHistory,
 
             riskEvents: supplier.riskEvents.map((risk) => ({
                 id: risk.id,
@@ -857,14 +901,14 @@ export async function GET(
 
                     partNumber: part.partNumber
                         ? {
-                              id: part.partNumber.id,
-                              partNumber:
-                                  part.partNumber.partNumber,
-                              description:
-                                  part.partNumber.description,
-                              vehicleProgram:
-                                  part.partNumber.vehicleProgram,
-                          }
+                            id: part.partNumber.id,
+                            partNumber:
+                                part.partNumber.partNumber,
+                            description:
+                                part.partNumber.description,
+                            vehicleProgram:
+                                part.partNumber.vehicleProgram,
+                        }
                         : null,
 
                     assignedTo: formatUser(part.assignedTo),
@@ -916,40 +960,40 @@ export async function GET(
 
                         riskEventPart: actionPlan.riskEventPart
                             ? {
-                                  id: actionPlan.riskEventPart.id,
-                                  status:
-                                      actionPlan.riskEventPart.status,
-                                  statusLabel:
-                                      formatRiskLevelLabel(
-                                          actionPlan
-                                              .riskEventPart
-                                              .status
-                                      ),
-                                  partNumber:
-                                      actionPlan.riskEventPart
-                                          .partNumber
-                                          ? {
-                                                id: actionPlan
+                                id: actionPlan.riskEventPart.id,
+                                status:
+                                    actionPlan.riskEventPart.status,
+                                statusLabel:
+                                    formatRiskLevelLabel(
+                                        actionPlan
+                                            .riskEventPart
+                                            .status
+                                    ),
+                                partNumber:
+                                    actionPlan.riskEventPart
+                                        .partNumber
+                                        ? {
+                                            id: actionPlan
+                                                .riskEventPart
+                                                .partNumber.id,
+                                            partNumber:
+                                                actionPlan
                                                     .riskEventPart
-                                                    .partNumber.id,
-                                                partNumber:
-                                                    actionPlan
-                                                        .riskEventPart
-                                                        .partNumber
-                                                        .partNumber,
-                                                description:
-                                                    actionPlan
-                                                        .riskEventPart
-                                                        .partNumber
-                                                        .description,
-                                                vehicleProgram:
-                                                    actionPlan
-                                                        .riskEventPart
-                                                        .partNumber
-                                                        .vehicleProgram,
-                                            }
-                                          : null,
-                              }
+                                                    .partNumber
+                                                    .partNumber,
+                                            description:
+                                                actionPlan
+                                                    .riskEventPart
+                                                    .partNumber
+                                                    .description,
+                                            vehicleProgram:
+                                                actionPlan
+                                                    .riskEventPart
+                                                    .partNumber
+                                                    .vehicleProgram,
+                                        }
+                                        : null,
+                            }
                             : null,
                     }
                 }),
@@ -1000,33 +1044,33 @@ export async function GET(
 
                     riskEventPart: request.riskEventPart
                         ? {
-                              id: request.riskEventPart.id,
-                              status:
-                                  request.riskEventPart.status,
-                              statusLabel:
-                                  formatRiskLevelLabel(
-                                      request.riskEventPart.status
-                                  ),
-                              partNumber:
-                                  request.riskEventPart.partNumber
-                                      ? {
-                                            id: request.riskEventPart
-                                                .partNumber.id,
-                                            partNumber:
-                                                request.riskEventPart
-                                                    .partNumber
-                                                    .partNumber,
-                                            description:
-                                                request.riskEventPart
-                                                    .partNumber
-                                                    .description,
-                                            vehicleProgram:
-                                                request.riskEventPart
-                                                    .partNumber
-                                                    .vehicleProgram,
-                                        }
-                                      : null,
-                          }
+                            id: request.riskEventPart.id,
+                            status:
+                                request.riskEventPart.status,
+                            statusLabel:
+                                formatRiskLevelLabel(
+                                    request.riskEventPart.status
+                                ),
+                            partNumber:
+                                request.riskEventPart.partNumber
+                                    ? {
+                                        id: request.riskEventPart
+                                            .partNumber.id,
+                                        partNumber:
+                                            request.riskEventPart
+                                                .partNumber
+                                                .partNumber,
+                                        description:
+                                            request.riskEventPart
+                                                .partNumber
+                                                .description,
+                                        vehicleProgram:
+                                            request.riskEventPart
+                                                .partNumber
+                                                .vehicleProgram,
+                                    }
+                                    : null,
+                        }
                         : null,
                 })),
             })),

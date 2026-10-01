@@ -2507,11 +2507,6 @@ export default function WeeklyAnalyticsPage() {
                                             previous={previousSnapshot}
                                         />
 
-                                        <ExecutiveStatusCard
-                                            current={latestSnapshot}
-                                            previous={previousSnapshot}
-                                        />
-
                                         <WeeklyForecastCard
                                             snapshots={history}
                                             current={latestSnapshot}

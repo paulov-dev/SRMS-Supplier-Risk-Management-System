@@ -8,6 +8,14 @@ import { SiteHeader } from "@/components/dashboard/site-header"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 
 import {
+    Supplier360History,
+} from "@/components/suppliers/supplier-360-history"
+
+import type {
+    SupplierWeek,
+} from "@/lib/supplier-360"
+
+import {
     SidebarInset,
     SidebarProvider,
 } from "@/components/ui/sidebar"
@@ -300,6 +308,7 @@ type Supplier = {
         isoCode: string
     } | null
     contacts: Contact[]
+    weeklyHistory?: SupplierWeek[]
     analytics: SupplierAnalytics
     riskEvents: RiskEvent[]
 }
@@ -902,8 +911,8 @@ export default function SupplierDetailsPage() {
             if (!response.ok) {
                 throw new Error(
                     data.details ||
-                        data.error ||
-                        "Erro ao buscar fornecedor"
+                    data.error ||
+                    "Erro ao buscar fornecedor"
                 )
             }
 
@@ -1105,18 +1114,18 @@ export default function SupplierDetailsPage() {
             if (!response.ok) {
                 throw new Error(
                     data?.details ||
-                        data?.error ||
-                        "Erro ao atualizar status"
+                    data?.error ||
+                    "Erro ao atualizar status"
                 )
             }
 
             setSupplier((current) =>
                 current
                     ? {
-                          ...current,
-                          status,
-                          statusLabel: getSupplierStatusLabel(status),
-                      }
+                        ...current,
+                        status,
+                        statusLabel: getSupplierStatusLabel(status),
+                    }
                     : current
             )
 
@@ -1164,8 +1173,8 @@ export default function SupplierDetailsPage() {
             if (!response.ok) {
                 throw new Error(
                     data?.details ||
-                        data?.error ||
-                        "Erro ao adicionar contato"
+                    data?.error ||
+                    "Erro ao adicionar contato"
                 )
             }
 
@@ -1213,19 +1222,19 @@ export default function SupplierDetailsPage() {
             if (!response.ok) {
                 throw new Error(
                     data?.details ||
-                        data?.error ||
-                        "Erro ao excluir contato"
+                    data?.error ||
+                    "Erro ao excluir contato"
                 )
             }
 
             setSupplier((current) =>
                 current
                     ? {
-                          ...current,
-                          contacts: current.contacts.filter(
-                              (item) => item.id !== contactId
-                          ),
-                      }
+                        ...current,
+                        contacts: current.contacts.filter(
+                            (item) => item.id !== contactId
+                        ),
+                    }
                     : current
             )
 
@@ -1287,15 +1296,15 @@ export default function SupplierDetailsPage() {
     const riskClosureRate =
         summary.openRisks + summary.closedRisks > 0
             ? (summary.closedRisks /
-                  (summary.openRisks + summary.closedRisks)) *
-              100
+                (summary.openRisks + summary.closedRisks)) *
+            100
             : 0
 
     const actionCompletionRate =
         summary.totalActionPlans > 0
             ? (summary.completedActionPlans /
-                  summary.totalActionPlans) *
-              100
+                summary.totalActionPlans) *
+            100
             : 0
 
     return (
@@ -1499,6 +1508,10 @@ export default function SupplierDetailsPage() {
                             </div>
 
                             <TabsContent value="overview" className="mt-4 space-y-6">
+                                <Supplier360History
+                                    weeks={supplier.weeklyHistory}
+                                    risks={supplier.riskEvents}
+                                />
                                 <div className="grid gap-6 xl:grid-cols-12">
                                     <Card className={`xl:col-span-5 ${decision.className}`}>
                                         <CardHeader>
