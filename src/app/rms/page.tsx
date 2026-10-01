@@ -52,6 +52,10 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import {
+  PortfolioAIAnalysis,
+} from "@/components/risk/portfolio-ai-analysis"
+
 type RiskLevel =
   | "GREEN"
   | "YELLOW"
@@ -232,21 +236,21 @@ function WorkflowBadge({
   const config =
     status === "OPEN"
       ? {
-          label: "Aberta",
-          className:
-            "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
-        }
+        label: "Aberta",
+        className:
+          "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
+      }
       : status === "CLOSED"
         ? {
-            label: "Fechada",
-            className:
-              "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
-          }
+          label: "Fechada",
+          className:
+            "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+        }
         : {
-            label: "Cancelada",
-            className:
-              "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
-          }
+          label: "Cancelada",
+          className:
+            "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+        }
 
   return (
     <Badge variant="outline" className={config.className}>
@@ -403,18 +407,18 @@ export default function RisksPage() {
       if (!suppliersRes.ok) {
         throw new Error(
           suppliersResponse.data?.details ||
-            suppliersResponse.data?.error ||
-            suppliersResponse.rawText ||
-            "Erro ao carregar fornecedores"
+          suppliersResponse.data?.error ||
+          suppliersResponse.rawText ||
+          "Erro ao carregar fornecedores"
         )
       }
 
       if (!usersRes.ok) {
         throw new Error(
           usersResponse.data?.details ||
-            usersResponse.data?.error ||
-            usersResponse.rawText ||
-            "Erro ao carregar responsáveis"
+          usersResponse.data?.error ||
+          usersResponse.rawText ||
+          "Erro ao carregar responsáveis"
         )
       }
 
@@ -504,9 +508,9 @@ export default function RisksPage() {
       if (!res.ok) {
         throw new Error(
           response.data?.details ||
-            response.data?.error ||
-            response.rawText ||
-            "Erro ao carregar RMs"
+          response.data?.error ||
+          response.rawText ||
+          "Erro ao carregar RMs"
         )
       }
 
@@ -609,7 +613,7 @@ export default function RisksPage() {
         <SidebarInset>
           <SiteHeader />
 
-          <div className="space-y-5 p-4 md:p-6">
+          <div className="space-y-5 p-4 md:p-6">            
             <Card className="overflow-hidden border-none bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white shadow-lg">
               <CardContent className="p-6 md:p-7">
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -628,7 +632,7 @@ export default function RisksPage() {
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-    
+
 
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -669,6 +673,8 @@ export default function RisksPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <PortfolioAIAnalysis />
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <SummaryCard
@@ -1143,81 +1149,81 @@ export default function RisksPage() {
                         </tr>
                       ) : (
                         risks.map((risk) => (
-                            <tr
-                              key={risk.id}
-                              className="border-b last:border-0 hover:bg-muted/40"
-                            >
-                              <td className="px-4 py-3 font-medium">
+                          <tr
+                            key={risk.id}
+                            className="border-b last:border-0 hover:bg-muted/40"
+                          >
+                            <td className="px-4 py-3 font-medium">
+                              <Link
+                                href={`/rms/${risk.id}`}
+                                className="inline-flex items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline"
+                              >
+                                {risk.code}
+                                <ArrowUpRight className="h-3.5 w-3.5" />
+                              </Link>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div>
                                 <Link
-                                  href={`/rms/${risk.id}`}
-                                  className="inline-flex items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline"
+                                  href={`/suppliers/${risk.supplier.id}`}
+                                  className="font-medium text-primary underline-offset-4 hover:underline"
                                 >
-                                  {risk.code}
-                                  <ArrowUpRight className="h-3.5 w-3.5" />
+                                  {risk.supplier.name}
                                 </Link>
-                              </td>
-
-                              <td className="px-4 py-3">
-                                <div>
-                                  <Link
-                                    href={`/suppliers/${risk.supplier.id}`}
-                                    className="font-medium text-primary underline-offset-4 hover:underline"
-                                  >
-                                    {risk.supplier.name}
-                                  </Link>
-                                  <p className="text-xs text-muted-foreground">
-                                    {risk.supplier.supplierCodeSap || "-"}{" "}
-                                    • {risk.supplier.country.isoCode}
-                                  </p>
-                                </div>
-                              </td>
-
-                              <td className="px-4 py-3">
-                                <span className="line-clamp-2">
-                                  {openingReasonLabels[risk.openingReason] || risk.openingReason}
-                                </span>
-                              </td>
-
-                              <td className="px-4 py-3">
-                                {risk.assignedTo?.name || "-"}
-                              </td>
-
-                              <td className="px-4 py-3">
-                                <WorkflowBadge status={risk.workflowStatus} />
-                              </td>
-
-                              <td className="px-4 py-3">
-                                <RiskLevelBadge level={risk.riskLevel} />
-                              </td>
-
-                              <td className="px-4 py-3">
-                                <Badge variant="outline">
-                                  <PackageSearch className="mr-1 h-3.5 w-3.5" />
-                                  {risk.counts.parts}
-                                </Badge>
-                              </td>
-
-                              <td className="px-4 py-3">
-                                <p>{formatDate(risk.createdAt)}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  Semana {risk.createdWeek}/{risk.createdYear}
+                                <p className="text-xs text-muted-foreground">
+                                  {risk.supplier.supplierCodeSap || "-"}{" "}
+                                  • {risk.supplier.country.isoCode}
                                 </p>
-                              </td>
+                              </div>
+                            </td>
 
-                              <td className="px-4 py-3">
-                                <div className="flex flex-wrap gap-1.5">
-                                  <Badge variant="outline" title="Planos de ação">
-                                    <ClipboardList className="mr-1 h-3.5 w-3.5" />
-                                    {risk.counts.actionPlans} plano(s)
-                                  </Badge>
-                                  <Badge variant="outline" title="Demandas logísticas">
-                                    <Truck className="mr-1 h-3.5 w-3.5" />
-                                    {risk.counts.logistics} logística
-                                  </Badge>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
+                            <td className="px-4 py-3">
+                              <span className="line-clamp-2">
+                                {openingReasonLabels[risk.openingReason] || risk.openingReason}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {risk.assignedTo?.name || "-"}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <WorkflowBadge status={risk.workflowStatus} />
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <RiskLevelBadge level={risk.riskLevel} />
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <Badge variant="outline">
+                                <PackageSearch className="mr-1 h-3.5 w-3.5" />
+                                {risk.counts.parts}
+                              </Badge>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <p>{formatDate(risk.createdAt)}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Semana {risk.createdWeek}/{risk.createdYear}
+                              </p>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1.5">
+                                <Badge variant="outline" title="Planos de ação">
+                                  <ClipboardList className="mr-1 h-3.5 w-3.5" />
+                                  {risk.counts.actionPlans} plano(s)
+                                </Badge>
+                                <Badge variant="outline" title="Demandas logísticas">
+                                  <Truck className="mr-1 h-3.5 w-3.5" />
+                                  {risk.counts.logistics} logística
+                                </Badge>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
                       )}
                     </tbody>
                   </table>

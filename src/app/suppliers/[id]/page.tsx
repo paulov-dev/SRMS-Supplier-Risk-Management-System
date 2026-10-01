@@ -8,6 +8,14 @@ import { SiteHeader } from "@/components/dashboard/site-header"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 
 import {
+    SupplierExecutivePriorities,
+} from "@/components/suppliers/supplier-executive-priorities"
+
+import {
+    SupplierAIAnalysis,
+} from "@/components/suppliers/supplier-ai-analysis"
+
+import {
     Supplier360History,
 } from "@/components/suppliers/supplier-360-history"
 
@@ -865,6 +873,7 @@ export default function SupplierDetailsPage() {
     const supplierId = params.id
 
     const [supplier, setSupplier] = useState<Supplier | null>(null)
+    const [activeTab, setActiveTab] = useState("overview")
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [statusLoading, setStatusLoading] = useState(false)
@@ -1483,7 +1492,11 @@ export default function SupplierDetailsPage() {
                             />
                         </div>
 
-                        <Tabs defaultValue="overview" className="w-full">
+                        <Tabs
+                            value={activeTab}
+                            onValueChange={setActiveTab}
+                            className="w-full"
+                        >
                             <div className="overflow-x-auto pb-1">
                                 <TabsList className="w-max min-w-full justify-start">
                                     <TabsTrigger value="overview">
@@ -1508,6 +1521,34 @@ export default function SupplierDetailsPage() {
                             </div>
 
                             <TabsContent value="overview" className="mt-4 space-y-6">
+
+                                <SupplierAIAnalysis
+                                    key={supplier.id}
+                                    supplierId={supplier.id}
+                                />
+
+                                <SupplierExecutivePriorities
+                                    summary={supplier.analytics.summary}
+                                    risks={supplier.riskEvents}
+                                    weeks={supplier.weeklyHistory}
+                                    onNavigate={(tab) => {
+                                        setRiskSearch("")
+                                        setRiskLevelFilter("all")
+                                        setRiskStatusFilter("all")
+
+                                        setActionSearch("")
+                                        setActionStatusFilter("all")
+                                        setActionPriorityFilter("all")
+                                        setActionDeadlineFilter("all")
+
+                                        setLogisticsSearch("")
+                                        setLogisticsStatusFilter("all")
+                                        setLogisticsTypeFilter("all")
+
+                                        setActiveTab(tab)
+                                    }}
+                                />
+
                                 <Supplier360History
                                     weeks={supplier.weeklyHistory}
                                     risks={supplier.riskEvents}
