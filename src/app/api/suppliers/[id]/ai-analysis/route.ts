@@ -6,6 +6,14 @@ import {
     getUserFromRequest,
 } from "@/app/api/lib/getUserFromToken"
 
+import { auditAIRequest } from "@/lib/ai-audit"
+
+import {
+    createAuditLog,
+} from "@/app/api/lib/createAuditLog"
+
+import { prisma } from "@/app/api/lib/prisma"
+
 import {
     SupplierAIError,
     buildAIEvidence,
@@ -31,7 +39,7 @@ type Context = {
     }>
 }
 
-export async function POST(
+async function runAnalysis(
     request: Request,
     context: Context
 ) {
@@ -250,4 +258,33 @@ export async function POST(
             502
         )
     }
+}
+
+export async function POST(
+    request: Request,
+    context: {
+        params: Promise<{
+            id: string
+        }>
+    }
+) {
+    const user = await getUserFromRequest()
+    const { id } = await context.params
+
+    return auditAIRequest({
+        request,
+
+        entityType: "Supplier",
+        entityId: id,
+
+        userId: user?.id ?? null,
+        model: process.env.OPENAI_MODEL,
+        scope: "supplier",
+
+        write: (entry) =>
+            createAuditLog(prisma, entry),
+
+        run: () =>
+            runAnalysis(request, context),
+    })
 }

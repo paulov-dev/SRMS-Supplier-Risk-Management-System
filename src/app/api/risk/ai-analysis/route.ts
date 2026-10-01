@@ -2,6 +2,12 @@ import { createHash } from "node:crypto"
 
 import { prisma } from "@/app/api/lib/prisma"
 
+import { auditAIRequest } from "@/lib/ai-audit"
+
+import {
+    createAuditLog,
+} from "@/app/api/lib/createAuditLog"
+
 import {
     getUserFromRequest,
 } from "@/app/api/lib/getUserFromToken"
@@ -28,7 +34,7 @@ type CachedAnalysis = {
 const cache = new Map<string, CachedAnalysis>()
 const attempts = new Map<string, number>()
 
-export async function POST(request: Request) {
+async function runAnalysis(request: Request) {
     const json = (
         body: unknown,
         status = 200
@@ -273,8 +279,8 @@ export async function POST(request: Request) {
             code: known
                 ? error.code
                 : timeout
-                  ? "AI_TIMEOUT"
-                  : "AI_INTERNAL",
+                    ? "AI_TIMEOUT"
+                    : "AI_INTERNAL",
 
             providerStatus: known
                 ? error.providerStatus
@@ -298,4 +304,38 @@ export async function POST(request: Request) {
             timeout ? 504 : 502
         )
     }
+}
+
+export async function POST(request: Request) {
+    const user = await getUserFromRequest()
+
+    const requestedScope =
+        new URL(request.url)
+            .searchParams.get("scope") ?? "all"
+
+    const scope =
+        ["all", "mine"].includes(requestedScope)
+            ? requestedScope
+            : "invalid"
+
+    return auditAIRequest({
+        request,
+
+        entityType: "RiskPortfolio",
+
+        entityId:
+            scope === "mine"
+                ? user?.id ?? "anonymous"
+                : "all",
+
+        userId: user?.id ?? null,
+        model: process.env.OPENAI_MODEL,
+        scope,
+
+        write: (entry) =>
+            createAuditLog(prisma, entry),
+
+        run: () =>
+            runAnalysis(request),
+    })
 }
