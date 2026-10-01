@@ -39,13 +39,13 @@ export function buildWeeklyBacktest(
     // Apenas resultados disponíveis até a semana selecionada.
     const eligible = cutoff
         ? snapshots.filter(
-              (snapshot) =>
-                  snapshot.year < cutoff.year ||
-                  (
-                      snapshot.year === cutoff.year &&
-                      snapshot.week <= cutoff.week
-                  )
-          )
+            (snapshot) =>
+                snapshot.year < cutoff.year ||
+                (
+                    snapshot.year === cutoff.year &&
+                    snapshot.week <= cutoff.week
+                )
+        )
         : []
 
     const byWeek =
@@ -146,7 +146,7 @@ export function buildWeeklyBacktest(
             0
         )
 
-        const winner =
+        const winner: "tie" | "trend" | "baseline" | null =
             count === 0
                 ? null
                 : totalError === totalBaselineError

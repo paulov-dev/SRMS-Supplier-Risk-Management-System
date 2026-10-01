@@ -5,6 +5,7 @@ import Link from "next/link"
 
 import { WeeklyForecastCard } from "@/components/analytics/weekly-forecast-card"
 import { WeeklyBacktestCard } from "@/components/analytics/weekly-backtest-card"
+import { WeeklyIntelligencePanel } from "@/components/analytics/weekly-inteligence-panel"
 
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { SiteHeader } from "@/components/dashboard/site-header"
@@ -2289,11 +2290,12 @@ export default function WeeklyAnalyticsPage() {
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h1 className="text-2xl font-semibold">
-                                    Histórico Semanal
+                                    Weekly Risk Intelligence
                                 </h1>
+
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Analise snapshots semanais, evolução das RMs,
-                                    movimentações, analistas de Risk e logística.
+                                    Antecipe prioridades com sinais semanais,
+                                    deterioração da carteira e recomendações por regra.
                                 </p>
                             </div>
 
@@ -2494,6 +2496,17 @@ export default function WeeklyAnalyticsPage() {
                                         value="executive"
                                         className="mt-4 space-y-4"
                                     >
+
+                                        <WeeklyIntelligencePanel
+                                            snapshots={history}
+                                            current={latestSnapshot}
+                                        />
+
+                                        <ExecutiveStatusCard
+                                            current={latestSnapshot}
+                                            previous={previousSnapshot}
+                                        />
+
                                         <ExecutiveStatusCard
                                             current={latestSnapshot}
                                             previous={previousSnapshot}
