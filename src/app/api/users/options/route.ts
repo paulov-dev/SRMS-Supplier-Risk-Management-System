@@ -29,6 +29,7 @@ export async function GET() {
     const permissions = getPermissions(currentUser)
 
     const canAccess =
+      permissions.includes("RISK_VIEW") ||
       permissions.includes("RISK_CREATE") ||
       permissions.includes("RISK_ASSIGN") ||
       permissions.includes("USER_MANAGE")

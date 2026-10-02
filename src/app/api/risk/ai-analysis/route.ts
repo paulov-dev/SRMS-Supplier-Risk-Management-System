@@ -4,6 +4,8 @@ import { prisma } from "@/app/api/lib/prisma"
 
 import { auditAIRequest } from "@/lib/ai-audit"
 
+import { checkRequestOrigin } from "@/lib/request-origin"
+
 import {
     createAIHistoryStore,
     findSavedAnalysis,
@@ -54,13 +56,15 @@ async function runAnalysis(request: Request) {
     try {
         const url = new URL(request.url)
 
-        if (
-            request.headers.get("origin") !==
-            url.origin
-        ) {
+        const originValidation = checkRequestOrigin(request)
+
+        if (!originValidation.ok) {
             return json(
-                { error: "Origem inválida." },
-                403
+                {
+                    error: originValidation.error,
+                    code: originValidation.code,
+                },
+                originValidation.status
             )
         }
 

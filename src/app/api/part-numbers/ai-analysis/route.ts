@@ -7,6 +7,8 @@ import { createAuditLog } from "@/app/api/lib/createAuditLog"
 import { auditAIRequest } from "@/lib/ai-audit"
 import { buildPNEvidence } from "@/lib/pn-ai"
 
+import { checkRequestOrigin } from "@/lib/request-origin"
+
 import {
     createAIHistoryStore,
     findSavedAnalysis,
@@ -70,13 +72,15 @@ export async function POST(request: Request) {
                 })
 
             try {
-                if (
-                    request.headers.get("origin") !==
-                    new URL(request.url).origin
-                ) {
+                const originValidation = checkRequestOrigin(request)
+
+                if (!originValidation.ok) {
                     return json(
-                        { error: "Origem inválida." },
-                        403
+                        {
+                            error: originValidation.error,
+                            code: originValidation.code,
+                        },
+                        originValidation.status
                     )
                 }
 

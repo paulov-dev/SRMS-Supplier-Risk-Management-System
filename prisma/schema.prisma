@@ -466,7 +466,7 @@ model User {
   activatedAt   DateTime?
   activatedById String?
 
-  activatedBy User?  @relation("UserActivatedBy", fields: [activatedById], references: [id], onDelete: SetNull)
+  activatedBy User? @relation("UserActivatedBy", fields: [activatedById], references: [id], onDelete: SetNull)
 
   activatedUsers User[] @relation("UserActivatedBy")
 
@@ -477,8 +477,8 @@ model User {
   assignedRisks RiskEvent[] @relation("AssignedTo")
   closedRisks   RiskEvent[] @relation("ClosedBy")
 
-  riskPartsAssigned       RiskEventPart[]        @relation("RiskPartAssignedTo")
-  riskPartHistory         RiskEventPartHistory[] @relation("RiskPartHistoryChangedBy")
+  riskPartsAssigned       RiskEventPart[]         @relation("RiskPartAssignedTo")
+  riskPartHistory         RiskEventPartHistory[]  @relation("RiskPartHistoryChangedBy")
   riskActionPlanHistories RiskActionPlanHistory[] @relation("RiskActionPlanHistoryChangedBy")
 
   logisticsRequested LogisticsRequest[] @relation("LogisticsRequestedBy")
@@ -503,6 +503,8 @@ model User {
 
   auditLogs     AuditLog[]
   statusChanges RiskStatusHistory[]
+
+  announcements Announcement[]
 }
 
 model Role {
@@ -1176,4 +1178,20 @@ model RiskEventPartApplication {
   @@unique([riskEventPartId, partNumberVehicleApplicationId])
   @@index([riskEventPartId])
   @@index([partNumberVehicleApplicationId])
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  category  String
+  pinned    Boolean  @default(false)
+  archived  Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([archived, pinned, createdAt])
 }

@@ -2,6 +2,8 @@ import { createHash } from "node:crypto"
 
 import { GET as getSupplier } from "../route"
 
+import { checkRequestOrigin } from "@/lib/request-origin"
+
 import {
     createAIHistoryStore,
     findSavedAnalysis,
@@ -60,13 +62,15 @@ async function runAnalysis(
         })
 
     try {
-        const origin = request.headers.get("origin")
-        const expectedOrigin = new URL(request.url).origin
+        const originValidation = checkRequestOrigin(request)
 
-        if (origin !== expectedOrigin) {
+        if (!originValidation.ok) {
             return json(
-                { error: "Origem inválida." },
-                403
+                {
+                    error: originValidation.error,
+                    code: originValidation.code,
+                },
+                originValidation.status
             )
         }
 

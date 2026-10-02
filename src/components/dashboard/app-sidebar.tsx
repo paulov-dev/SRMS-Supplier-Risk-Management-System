@@ -27,6 +27,7 @@ import { NavDocuments } from "@/components/dashboard/nav-documents"
 import { NavMain } from "@/components/dashboard/nav-main"
 import { NavSecondary } from "@/components/dashboard/nav-secondary"
 import { NavUser } from "@/components/dashboard/nav-user"
+import { RecentAccessTracker } from "@/components/dashboard/recent-access-tracker"
 
 import {
   Sidebar,
@@ -162,7 +163,7 @@ export function AppSidebar({
 
     navMain: [
       {
-        title: "Dashboard",
+        title: "Início",
         url: "/dashboard",
         icon: IconDashboard,
         permission: "DASHBOARD_VIEW",
@@ -236,7 +237,7 @@ export function AppSidebar({
         title: "Usuários",
         url: "/users",
         icon: IconUsers,
-        permission: ["USER_MANAGE", "RISK_VIEW"],
+        permission: ["USER_VIEW"],
       },
       {
         title: "Administração",
@@ -280,7 +281,7 @@ export function AppSidebar({
         name: "Análise semanal",
         url: "/analytics/weekly",
         icon: IconChartBar,
-        permission: ["ANALYTICS_VIEW", "DASHBOARD_VIEW", "USER_MANAGE"],
+        permission: ["ANALYTICS_VIEW"],
       },
       {
         name: "Config de snapshot",
@@ -296,6 +297,7 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
+      <RecentAccessTracker />
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

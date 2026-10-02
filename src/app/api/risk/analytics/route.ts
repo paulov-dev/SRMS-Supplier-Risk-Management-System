@@ -188,7 +188,7 @@ export async function GET(req: Request) {
 
     const permissions = getPermissions(currentUser)
 
-    if (!permissions.includes("RISK_VIEW")) {
+    if (!permissions.includes("ANALYTICS_VIEW")) {
       return NextResponse.json(
         {
           error:
