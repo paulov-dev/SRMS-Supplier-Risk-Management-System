@@ -2495,28 +2495,13 @@ export default function WeeklyAnalyticsPage() {
                                     <TabsContent
                                         value="executive"
                                         className="mt-4 space-y-4"
-                                    >
-
-                                        <WeeklyIntelligencePanel
-                                            snapshots={history}
-                                            current={latestSnapshot}
-                                        />
+                                    >                                        
 
                                         <ExecutiveStatusCard
                                             current={latestSnapshot}
                                             previous={previousSnapshot}
                                         />
-
-                                        <WeeklyForecastCard
-                                            snapshots={history}
-                                            current={latestSnapshot}
-                                        />
-
-                                        <WeeklyBacktestCard
-                                            snapshots={history}
-                                            current={latestSnapshot}
-                                        />
-
+                                      
                                         <CurrentRiskTeamStateCard
                                             state={data.teamCurrentState}
                                         />
