@@ -7,6 +7,13 @@ import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { SiteHeader } from "@/components/dashboard/site-header"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 
+import { SupplierScoreDetail } from "@/components/suppliers/supplier-score-detail"
+
+import {
+    supplierScoreLabels,
+    type SupplierScore,
+} from "@/lib/supplier-risk-score"
+
 import {
     SupplierExecutivePriorities,
 } from "@/components/suppliers/supplier-executive-priorities"
@@ -309,6 +316,7 @@ type Supplier = {
     countryId: string
     riskScore: number | null
     lastRiskCalculation: string | null
+    riskScoreSummary?: SupplierScore
     createdAt: string
     country: {
         id: string
@@ -1443,13 +1451,17 @@ export default function SupplierDetailsPage() {
                             </CardContent>
                         </Card>
 
+                        <SupplierScoreDetail value={supplier.riskScoreSummary} />
+
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                             <MetricCard
                                 title="Risk score"
                                 value={supplier.riskScore ?? "-"}
-                                description={`Calculado em ${formatDate(
-                                    supplier.lastRiskCalculation
-                                )}`}
+                                description={
+                                    supplier.riskScoreSummary
+                                        ? supplierScoreLabels[supplier.riskScoreSummary.status]
+                                        : "Score ainda não consultado"
+                                }
                                 icon={<BarChart3 className="h-5 w-5" />}
                             />
 
@@ -1527,7 +1539,7 @@ export default function SupplierDetailsPage() {
                                     supplierId={supplier.id}
                                 />
 
-                                <SupplierExecutivePriorities
+                                {/* <SupplierExecutivePriorities
                                     summary={supplier.analytics.summary}
                                     risks={supplier.riskEvents}
                                     weeks={supplier.weeklyHistory}
@@ -1547,12 +1559,13 @@ export default function SupplierDetailsPage() {
 
                                         setActiveTab(tab)
                                     }}
-                                />
+                                /> */}
 
-                                <Supplier360History
+                                {/* <Supplier360History
                                     weeks={supplier.weeklyHistory}
                                     risks={supplier.riskEvents}
-                                />
+                                /> */}
+                                
                                 <div className="grid gap-6 xl:grid-cols-12">
                                     <Card className={`xl:col-span-5 ${decision.className}`}>
                                         <CardHeader>

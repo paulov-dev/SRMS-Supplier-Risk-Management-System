@@ -8,6 +8,11 @@ export type Evidence = {
     href?: string
 }
 
+import {
+    supplierScoreEvidence,
+    type SupplierScore,
+} from "./supplier-risk-score.ts"
+
 export type AIAnalysis = {
     summary: string
     priorities: {
@@ -24,6 +29,8 @@ export type SupplierAIInput = {
     analytics: {
         summary: Record<string, number | null>
     }
+
+    riskScoreSummary?: SupplierScore
 
     weeklyHistory?: {
         year: number
@@ -84,11 +91,11 @@ export function buildAIEvidence(
         },
         {
             id: "score",
-            label: "Score registrado",
-            value: {
-                score: supplier.riskScore,
-                calculatedAt: supplier.lastRiskCalculation,
-            },
+            label: "Score operacional do fornecedor",
+            value: supplierScoreEvidence(
+                supplier.riskScoreSummary,
+                supplier.riskScore
+            ),
         },
         {
             id: "weeks",

@@ -66,6 +66,9 @@ import {
 
 import { toast } from "sonner"
 
+import { RiskScoreCard } from "@/components/risk/risk-score-card"
+import type { RiskScore } from "@/lib/risk-score"
+
 type ActionPlanItem = RiskDetail["actionPlans"][number]
 
 type ActionPlanStatus =
@@ -272,6 +275,7 @@ type RiskDetail = {
     createdAt: string
     updatedAt: string
     closedAt: string | null
+    riskScore?: RiskScore
 
     supplier: {
         id: string
@@ -2795,6 +2799,8 @@ export default function RiskDetailPage() {
                                         </CardContent>
                                     </Card>
                                 </div>
+
+                                <RiskScoreCard value={risk.riskScore} />
 
                                 <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_400px]">
                                     <div className="min-w-0 space-y-6">

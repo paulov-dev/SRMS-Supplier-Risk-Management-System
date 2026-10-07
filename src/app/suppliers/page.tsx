@@ -8,6 +8,8 @@ import { SiteHeader } from "@/components/dashboard/site-header"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { SuppliersTable } from "@/components/suppliers/suppliers-table"
 
+import type { SupplierScore } from "@/lib/supplier-risk-score"
+
 import {
     SidebarInset,
     SidebarProvider,
@@ -79,6 +81,7 @@ type Supplier = {
     address?: string | null
     riskScore?: number | null
     lastRiskCalculation?: string | null
+    riskScoreSummary?: SupplierScore
     createdAt?: string
     country: {
         id: string

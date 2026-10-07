@@ -4,6 +4,13 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 
+import {
+  calculateSupplierScore,
+  supplierScoreRiskSelect,
+} from "@/lib/supplier-risk-score"
+
+import { createAuditLog } from "@/app/api/lib/createAuditLog"
+
 function getPermissions(user: any) {
   return [
     ...new Set(
@@ -53,58 +60,95 @@ function toPrismaJsonObject(
 }
 
 export async function GET() {
+  const json = (body: unknown, status = 200) =>
+    NextResponse.json(body, {
+      status,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    })
+
   try {
     const currentUser = await getUserFromRequest()
 
     if (!currentUser) {
-      return NextResponse.json(
-        { error: "Não autenticado" },
-        { status: 401 }
-      )
+      return json({ error: "Não autenticado" }, 401)
     }
+
+    const audit = (
+      action: string,
+      newValue: Record<string, unknown>
+    ) =>
+      createAuditLog(prisma, {
+        entityType: "Supplier",
+        entityId: "list",
+        changedBy: currentUser.id,
+        action,
+        newValue,
+      })
 
     const permissions = getPermissions(currentUser)
 
-    if (!permissions.includes("SUPPLIER_VIEW")) {
-      return NextResponse.json(
+    if (
+      !currentUser.isActive ||
+      !permissions.includes("SUPPLIER_VIEW")
+    ) {
+      await audit("SUPPLIER_LIST_DENIED", {
+        reason: "INACTIVE_OR_MISSING_PERMISSION",
+      })
+
+      return json(
         {
-          error:
-            "Sem permissão para visualizar fornecedores",
+          error: "Sem permissão para visualizar fornecedores",
         },
-        { status: 403 }
+        403
       )
     }
+
+    await audit("SUPPLIER_LIST_REQUESTED", {})
 
     const suppliers = await prisma.supplier.findMany({
       include: {
         country: true,
         contacts: true,
+        riskEvents: {
+          where: {
+            workflowStatus: "OPEN",
+          },
+          select: supplierScoreRiskSelect,
+        },
       },
       orderBy: {
         createdAt: "desc",
       },
     })
 
-    return NextResponse.json(
-      suppliers.map((supplier) => ({
+    const now = new Date()
+
+    const items = suppliers.map(supplier => {
+      const riskScoreSummary = calculateSupplierScore(
+        supplier.riskEvents,
+        now
+      )
+
+      return {
         id: supplier.id,
         name: supplier.name,
         supplierCodeSap: supplier.supplierCodeSap,
         status: supplier.status,
         address: supplier.address,
         countryId: supplier.countryId,
-        riskScore: supplier.riskScore,
+        riskScore: riskScoreSummary.score,
         lastRiskCalculation:
-          supplier.lastRiskCalculation,
+          riskScoreSummary.calculatedAt,
+        riskScoreSummary,
         createdAt: supplier.createdAt,
-
         country: {
           id: supplier.country.id,
           name: supplier.country.name,
           isoCode: supplier.country.isoCode,
         },
-
-        contacts: supplier.contacts.map((contact) => ({
+        contacts: supplier.contacts.map(contact => ({
           id: contact.id,
           name: contact.name,
           email: contact.email,
@@ -112,14 +156,30 @@ export async function GET() {
           position: contact.position,
           createdAt: contact.createdAt,
         })),
-      }))
-    )
-  } catch (error) {
-    console.error(error)
+      }
+    })
 
-    return NextResponse.json(
-      { error: "Erro ao buscar fornecedores" },
-      { status: 500 }
+    const response = json(items)
+
+    await audit("SUPPLIER_SCORES_VIEWED", {
+      suppliers: items.map(item => ({
+        id: item.id,
+        riskScoreSummary: item.riskScoreSummary,
+      })),
+    })
+
+    return response
+  } catch {
+    console.error(
+      "[supplier-score] Falha na consulta ou auditoria da lista"
+    )
+
+    return json(
+      {
+        error:
+          "Não foi possível consultar os fornecedores e registrar seus scores.",
+      },
+      503
     )
   }
 }

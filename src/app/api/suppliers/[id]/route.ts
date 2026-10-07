@@ -5,6 +5,9 @@ import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 import { aggregateSupplierWeeks } from "@/lib/supplier-360"
 
+import { calculateSupplierScore } from "@/lib/supplier-risk-score"
+import { createAuditLog } from "@/app/api/lib/createAuditLog"
+
 type Params = {
     params: Promise<{
         id: string
@@ -741,25 +744,43 @@ export async function GET(
             )
         }
 
+        const { id } = await params
+
+        const audit = (
+            action: string,
+            newValue: Record<string, unknown> = {}
+        ) =>
+            createAuditLog(prisma, {
+                entityType: "Supplier",
+                entityId: id,
+                changedBy: currentUser.id,
+                action,
+                newValue,
+            })
+
         const permissions = getPermissions(currentUser)
 
         if (
+            !currentUser.isActive ||
             !hasAnyPermission(permissions, [
                 "SUPPLIER_VIEW",
                 "RISK_VIEW",
                 "USER_MANAGE",
             ])
         ) {
+            await audit("SUPPLIER_DETAIL_DENIED", {
+                reason: "INACTIVE_OR_MISSING_PERMISSION",
+            })
+
             return NextResponse.json(
                 {
-                    error:
-                        "Sem permissão para visualizar fornecedores",
+                    error: "Sem permissão para visualizar fornecedores",
                 },
                 { status: 403 }
             )
         }
 
-        const { id } = await params
+        await audit("SUPPLIER_DETAIL_REQUESTED")
 
         const supplier = await prisma.supplier.findUnique({
             where: {
@@ -769,6 +790,8 @@ export async function GET(
         })
 
         if (!supplier) {
+            await audit("SUPPLIER_DETAIL_NOT_FOUND")
+
             return NextResponse.json(
                 { error: "Fornecedor não encontrado" },
                 { status: 404 }
@@ -819,7 +842,11 @@ export async function GET(
 
         const analytics = buildSupplierAnalytics(supplier)
 
-        return NextResponse.json({
+        const riskScoreSummary = calculateSupplierScore(
+            supplier.riskEvents
+        )
+
+        const response = NextResponse.json({
             id: supplier.id,
             name: supplier.name,
             supplierCodeSap: supplier.supplierCodeSap,
@@ -827,8 +854,9 @@ export async function GET(
             statusLabel: formatSupplierStatusLabel(supplier.status),
             address: supplier.address,
             countryId: supplier.countryId,
-            riskScore: supplier.riskScore,
-            lastRiskCalculation: supplier.lastRiskCalculation,
+            riskScore: riskScoreSummary.score,
+            lastRiskCalculation: riskScoreSummary.calculatedAt,
+            riskScoreSummary,
             createdAt: supplier.createdAt,
 
             country: supplier.country
@@ -1074,7 +1102,17 @@ export async function GET(
                         : null,
                 })),
             })),
+        }, {
+            headers: {
+                "Cache-Control": "no-store",
+            },
         })
+
+        await audit("SUPPLIER_SCORE_VIEWED", {
+            riskScoreSummary,
+        })
+
+        return response
     } catch (error) {
         console.error(error)
 

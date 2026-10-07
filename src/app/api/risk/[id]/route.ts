@@ -8,6 +8,13 @@ import { prisma } from "@/app/api/lib/prisma"
 import { getUserFromRequest } from "@/app/api/lib/getUserFromToken"
 import { createNotification } from "@/app/api/lib/createNotification"
 
+import {
+  calculateRiskScore,
+  RISK_SCORE_VERSION,
+} from "@/lib/risk-score"
+
+import { createAuditLog } from "@/app/api/lib/createAuditLog"
+
 function getPermissions(user: any): string[] {
     const permissions =
         user.roles?.flatMap((ur: any) =>
@@ -703,70 +710,152 @@ function formatRiskResponse(risk: any) {
 }
 
 export async function GET(
-    _req: Request,
-    {
-        params,
-    }: {
-        params: Promise<{
-            id: string
-        }>
-    }
+  _req: Request,
+  {
+    params,
+  }: {
+    params: Promise<{ id: string }>
+  }
 ) {
-    try {
-        const currentUser = await getUserFromRequest()
+  const json = (body: unknown, status = 200) =>
+    NextResponse.json(body, {
+      status,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    })
 
-        if (!currentUser) {
-            return NextResponse.json(
-                { error: "Não autenticado" },
-                { status: 401 }
-            )
-        }
+  let actorId: string | null = null
+  let entityId = "unknown"
+  let started = false
 
-        const permissions = getPermissions(currentUser)
+  try {
+    const currentUser = await getUserFromRequest()
 
-        if (!hasPermission(permissions, "RISK_VIEW")) {
-            return NextResponse.json(
-                {
-                    error:
-                        "Sem permissão para visualizar esta RM",
-                },
-                { status: 403 }
-            )
-        }
+    if (!currentUser) {
+      return json({ error: "Não autenticado" }, 401)
+    }
 
-        const { id } = await params
+    actorId = currentUser.id
 
-        const risk = await prisma.riskEvent.findUnique({
-            where: {
-                id,
-            },
-            include: riskInclude,
+    const { id } = await params
+    entityId = id
+
+    const audit = (
+      action: string,
+      newValue: Record<string, unknown>
+    ) =>
+      createAuditLog(prisma, {
+        entityType: "RiskEvent",
+        entityId: id,
+        changedBy: currentUser.id,
+        action,
+        newValue,
+      })
+
+    const permissions = getPermissions(currentUser)
+
+    if (
+      !currentUser.isActive ||
+      !hasPermission(permissions, "RISK_VIEW")
+    ) {
+      await audit("RISK_DETAIL_DENIED", {
+        reason: !currentUser.isActive
+          ? "INACTIVE_USER"
+          : "MISSING_PERMISSION",
+      })
+
+      return json(
+        {
+          error: "Sem permissão para visualizar esta RM",
+        },
+        403
+      )
+    }
+
+    await audit("RISK_DETAIL_REQUESTED", {
+      scoreVersion: RISK_SCORE_VERSION,
+    })
+
+    started = true
+
+    return await prisma.$transaction(
+      async tx => {
+        const risk = await tx.riskEvent.findUnique({
+          where: { id },
+          include: riskInclude,
         })
 
         if (!risk) {
-            return NextResponse.json(
-                { error: "RM não encontrada" },
-                { status: 404 }
-            )
+          await createAuditLog(tx, {
+            entityType: "RiskEvent",
+            entityId: id,
+            changedBy: currentUser.id,
+            action: "RISK_DETAIL_NOT_FOUND",
+          })
+
+          return json(
+            { error: "RM não encontrada" },
+            404
+          )
         }
 
-        return NextResponse.json(
-            formatRiskResponse(risk)
-        )
-    } catch (error) {
-        console.error("ERRO DETALHADO AO BUSCAR RM:", error)
+        const riskScore = calculateRiskScore(risk)
 
-        return NextResponse.json(
-            {
-                error: "Erro ao buscar detalhes da RM",
-                details:
-                    error instanceof Error
-                        ? error.message
-                        : String(error),
-            },
-            { status: 500 }
+        const response = {
+          ...formatRiskResponse(risk),
+          riskScore,
+        }
+
+        await createAuditLog(tx, {
+          entityType: "RiskEvent",
+          entityId: id,
+          changedBy: currentUser.id,
+          action: "RISK_SCORE_VIEWED",
+          newValue: {
+            riskScore,
+          },
+        })
+
+        return json(response)
+      },
+      {
+        isolationLevel:
+          Prisma.TransactionIsolationLevel.RepeatableRead,
+        timeout: 15000,
+      }
+    )
+  } catch {
+    if (started && actorId) {
+      try {
+        await createAuditLog(prisma, {
+          entityType: "RiskEvent",
+          entityId,
+          changedBy: actorId,
+          action: "RISK_DETAIL_FAILED",
+          newValue: {
+            code: "RISK_DETAIL_UNAVAILABLE",
+          },
+        })
+      } catch {
+        console.error(
+          "[risk-score] Falha ao registrar erro na auditoria"
         )
+      }
     }
+
+    console.error(
+      "[risk-score] Consulta ou auditoria indisponível"
+    )
+
+    return json(
+      {
+        error:
+          "Não foi possível consultar a RM e registrar seu score. Tente novamente.",
+      },
+      503
+    )
+  }
 }
 
 export async function PATCH(

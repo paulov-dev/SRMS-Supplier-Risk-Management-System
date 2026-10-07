@@ -4,6 +4,11 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import {
+  supplierScoreLabels,
+  type SupplierScore,
+} from "@/lib/supplier-risk-score"
+
+import {
   Table,
   TableBody,
   TableCell,
@@ -41,12 +46,13 @@ type Supplier = {
   id: string
   name: string
   supplierCodeSap?: string
+  riskScoreSummary?: SupplierScore
   status:
-    | "ACTIVE"
-    | "UNDER_MONITORING"
-    | "AT_RISK"
-    | "BLOCKED"
-    | "INACTIVE"
+  | "ACTIVE"
+  | "UNDER_MONITORING"
+  | "AT_RISK"
+  | "BLOCKED"
+  | "INACTIVE"
   riskScore?: number | null
   country: {
     id: string
@@ -176,7 +182,7 @@ export function SuppliersTable({
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              
+
               <SelectContent>
                 <SelectItem value="all">
                   Todos
@@ -274,7 +280,13 @@ export function SuppliersTable({
                   </TableCell>
 
                   <TableCell>
-                    {supplier.riskScore ?? "-"}
+                    <div>{supplier.riskScore ?? "—"}</div>
+
+                    {supplier.riskScoreSummary && (
+                      <div className="text-xs text-muted-foreground">
+                        {supplierScoreLabels[supplier.riskScoreSummary.status]}
+                      </div>
+                    )}
                   </TableCell>
 
                   <TableCell className="text-right">
