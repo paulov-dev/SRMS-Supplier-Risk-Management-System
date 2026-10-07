@@ -5,12 +5,15 @@ const path = require("node:path")
 const vm = require("node:vm")
 const ts = require("typescript")
 
+
+
 function setup({
   authenticated = true,
   auditFailure = false,
   permissions = ["DASHBOARD_VIEW", "RISK_VIEW"],
   roles = ["RISK_ANALYST"],
   active = true,
+  originConfig = { NODE_ENV: "test" },
 } = {}) {
   const calls = []
   const audits = []
@@ -81,33 +84,38 @@ function setup({
 
   const module = { exports: {} }
 
-  const dependencies = {
-    "@/app/api/lib/prisma": {
-      prisma: db,
+ const dependencies = {
+  "@/app/api/lib/prisma": {
+    prisma: db,
+  },
+
+  "@/app/api/lib/getUserFromToken": {
+    getUserFromRequest: async () =>
+      authenticated ? actor : null,
+  },
+
+  "@/app/api/lib/createAuditLog": {
+    createAuditLog: async (_, data) => {
+      if (auditFailure) {
+        throw new Error("AUDIT_UNAVAILABLE")
+      }
+
+      audits.push(data)
     },
+  },
 
-    "@/app/api/lib/getUserFromToken": {
-      getUserFromRequest: async () =>
-        authenticated ? actor : null,
-    },
+  "@/lib/home-data":
+    require("../src/lib/home-data.ts"),
 
-    "@/app/api/lib/createAuditLog": {
-      createAuditLog: async (_, data) => {
-        if (auditFailure) {
-          throw new Error("AUDIT_UNAVAILABLE")
-        }
+  "@/lib/dashboard-data":
+    require("../src/lib/dashboard-data.ts"),
 
-        audits.push(data)
-      },
-    },
-
-    "@/lib/home-data":
-      require("../src/lib/home-data.ts"),
-
-    "@/lib/dashboard-data":
-      require("../src/lib/dashboard-data.ts"),
-  }
-
+  "@/lib/request-origin": {
+    checkRequestOrigin: request =>
+      require("../src/lib/request-origin.ts")
+        .checkRequestOrigin(request, originConfig),
+  },
+}
   vm.runInNewContext(compiled, {
     module,
     exports: module.exports,
@@ -465,4 +473,82 @@ test("conta inativa não recebe dados mesmo com as permissões", async () => {
   )
 
   assert.equal(api.calls.length, 0)
+})
+
+test("registra fornecedor com origem pública e URL interna em produção", async () => {
+  const api = setup({
+    permissions: ["SUPPLIER_VIEW"],
+    originConfig: {
+      NODE_ENV: "production",
+      SRMS_ALLOWED_ORIGINS: "https://srms.example.com",
+    },
+  })
+
+  const response = await api.POST(
+    post(
+      "/suppliers/734f06a6-ffa6-491f-8541-d741f2d5f9c8",
+      "https://srms.example.com"
+    )
+  )
+
+  assert.equal(response.status, 200)
+  assert.equal(
+    api.audits.at(-1).action,
+    "RECENT_ITEM_OPEN"
+  )
+  assert.equal(
+    api.audits.at(-1).entityType,
+    "Supplier"
+  )
+})
+
+test("origem externa é negada e auditada sem consultar fornecedor", async () => {
+  const api = setup({
+    permissions: ["SUPPLIER_VIEW"],
+    originConfig: {
+      NODE_ENV: "production",
+      SRMS_ALLOWED_ORIGINS: "https://srms.example.com",
+    },
+  })
+
+  const response = await api.POST(
+    post(
+      "/suppliers/734f06a6-ffa6-491f-8541-d741f2d5f9c8",
+      "https://other.test"
+    )
+  )
+
+  assert.equal(response.status, 403)
+  assert.equal(api.calls.length, 0)
+  assert.equal(
+    api.audits.at(-1).newValue.reason,
+    "INVALID_ORIGIN"
+  )
+})
+
+test("configuração ausente é informada e auditada sem sucesso falso", async () => {
+  const api = setup({
+    permissions: ["SUPPLIER_VIEW"],
+    originConfig: {
+      NODE_ENV: "production",
+    },
+  })
+
+  const response = await api.POST(
+    post(
+      "/suppliers/734f06a6-ffa6-491f-8541-d741f2d5f9c8",
+      "https://srms.example.com"
+    )
+  )
+
+  assert.equal(response.status, 503)
+  assert.equal(
+    (await response.json()).code,
+    "ORIGIN_CONFIG_MISSING"
+  )
+  assert.equal(api.calls.length, 0)
+  assert.equal(
+    api.audits.at(-1).newValue.reason,
+    "ORIGIN_CONFIG_MISSING"
+  )
 })

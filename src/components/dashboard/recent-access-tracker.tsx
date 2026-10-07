@@ -15,8 +15,6 @@ export function RecentAccessTracker() {
   useEffect(() => {
     if (!userId || !recentTarget(path)) return
 
-    // Evita o efeito duplicado do Strict Mode
-    // antes do envio.
     const timer = window.setTimeout(() => {
       fetch("/api/dashboard", {
         method: "POST",
@@ -28,15 +26,25 @@ export function RecentAccessTracker() {
         body: JSON.stringify({ path }),
       })
         .then(async response => {
-          if (!response.ok) {
-            throw new Error(
-              "Não foi possível registrar o acesso no histórico."
-            )
-          }
+          if (response.ok) return
+
+          const body = await response
+            .json()
+            .catch(() => null)
+
+          const message =
+            typeof body?.error === "string" &&
+            body.error
+              ? body.error
+              : "Não foi possível registrar o acesso no histórico."
+
+          throw new Error(message)
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           toast.error(
-            "Não foi possível registrar o acesso no histórico.",
+            error instanceof Error
+              ? error.message
+              : "Não foi possível registrar o acesso no histórico.",
             {
               id: "recent-access-error",
             }

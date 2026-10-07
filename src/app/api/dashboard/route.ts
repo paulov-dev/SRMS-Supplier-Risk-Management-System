@@ -22,6 +22,8 @@ import {
   type HomePage,
 } from "@/lib/home-data"
 
+import { checkRequestOrigin } from "@/lib/request-origin"
+
 export const runtime = "nodejs"
 
 const json = (body: unknown, status = 200) =>
@@ -567,10 +569,35 @@ export async function POST(request: Request) {
   const user = await getUserFromRequest()
 
   if (!user) {
-    return json({ error: "Não autenticado." }, 401)
+    return json(
+      { error: "Não autenticado." },
+      401
+    )
   }
 
   try {
+    const originValidation = checkRequestOrigin(request)
+
+    if (!originValidation.ok) {
+      await createAuditLog(prisma, {
+        entityType: "Dashboard",
+        entityId: user.id,
+        changedBy: user.id,
+        action: "RECENT_ITEM_DENIED",
+        newValue: {
+          reason: originValidation.code,
+        },
+      })
+
+      return json(
+        {
+          error: originValidation.error,
+          code: originValidation.code,
+        },
+        originValidation.status
+      )
+    }
+
     const target = recentTarget(
       (await request.json().catch(() => null))?.path
     )
@@ -598,22 +625,25 @@ export async function POST(request: Request) {
               )
       )
 
-    if (
-      !user.isActive ||
-      request.headers.get("origin") !==
-        new URL(request.url).origin ||
-      !allowed ||
-      !target
-    ) {
+    if (!user.isActive || !allowed || !target) {
       await createAuditLog(prisma, {
         entityType: "Dashboard",
         entityId: user.id,
         changedBy: user.id,
         action: "RECENT_ITEM_DENIED",
+        newValue: {
+          reason: !user.isActive
+            ? "INACTIVE_USER"
+            : !target
+              ? "INVALID_TARGET"
+              : "MISSING_PERMISSION",
+        },
       })
 
       return json(
-        { error: "Acesso recente não autorizado." },
+        {
+          error: "Acesso recente não autorizado.",
+        },
         403
       )
     }
@@ -621,17 +651,29 @@ export async function POST(request: Request) {
     const exists =
       target.kind === "rms"
         ? await prisma.riskEvent.findUnique({
-            where: { id: target.id },
-            select: { id: true },
+            where: {
+              id: target.id,
+            },
+            select: {
+              id: true,
+            },
           })
         : target.kind === "pns"
           ? await prisma.partNumber.findUnique({
-              where: { id: target.id },
-              select: { id: true },
+              where: {
+                id: target.id,
+              },
+              select: {
+                id: true,
+              },
             })
           : await prisma.supplier.findUnique({
-              where: { id: target.id },
-              select: { id: true },
+              where: {
+                id: target.id,
+              },
+              select: {
+                id: true,
+              },
             })
 
     await createAuditLog(prisma, {
@@ -645,12 +687,33 @@ export async function POST(request: Request) {
 
     return exists
       ? json({ ok: true })
-      : json({ error: "Registro não encontrado." }, 404)
-  } catch {
+      : json(
+          {
+            error: "Registro não encontrado.",
+          },
+          404
+        )
+  } catch (error) {
+    console.error("[recent-access]", {
+      name:
+        error instanceof Error
+          ? error.name
+          : "UnknownError",
+
+      code:
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof error.code === "string"
+          ? error.code
+          : "RECENT_ACCESS_FAILED",
+    })
+
     return json(
       {
         error:
           "Não foi possível registrar o acesso recente.",
+        code: "RECENT_ACCESS_FAILED",
       },
       503
     )
