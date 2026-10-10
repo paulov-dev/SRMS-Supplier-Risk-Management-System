@@ -158,7 +158,7 @@ export function AppSidebar({
     user: {
       name: user?.name || "Usuário SRMS",
       email: user?.email || "usuario@srms.com",
-      avatar: "",
+      avatar: user?.picture || null,
     },
 
     navMain: [
@@ -269,11 +269,7 @@ export function AppSidebar({
     ] satisfies NavItem[],
 
     navSecondary: [
-      {
-        title: "Buscar RM",
-        url: "/rms",
-        icon: IconSearch,
-      },
+
     ],
 
     documents: [

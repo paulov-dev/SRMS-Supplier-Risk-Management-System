@@ -1552,7 +1552,7 @@ function CurrentRiskTeamStateCard({
                             <CurrentStateMetric
                                 label="Analistas ativos"
                                 value={analysts.length}
-                                description="Role Risk_Analyst"
+                                description="Time de Analista"
                                 icon={<Users className="h-5 w-5 text-blue-600" />}
                             />
                             <CurrentStateMetric
@@ -2290,12 +2290,11 @@ export default function WeeklyAnalyticsPage() {
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h1 className="text-2xl font-semibold">
-                                    Weekly Risk Intelligence
+                                    Análise Semanal - Risk Intelligence
                                 </h1>
 
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Antecipe prioridades com sinais semanais,
-                                    deterioração da carteira e recomendações por regra.
+                                    Analise a evolução de seu time.
                                 </p>
                             </div>
 

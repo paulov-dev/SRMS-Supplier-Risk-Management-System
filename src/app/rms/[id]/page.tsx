@@ -1261,6 +1261,58 @@ function AssessmentSelectField({
     )
 }
 
+function getPartLogisticsStatusPill(status: string | null | undefined) {
+    const statuses: Record<string, { label: string; className: string }> = {
+        NOT_REQUESTED: {
+            label: "Não solicitado",
+            className:
+                "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+        },
+        REQUESTED: {
+            label: "Solicitado",
+            className:
+                "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+        },
+        IN_LOGISTICS: {
+            label: "Em logística",
+            className:
+                "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
+        },
+        APPROVED: {
+            label: "Aprovado",
+            className:
+                "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300",
+        },
+        REJECTED: {
+            label: "Rejeitado",
+            className:
+                "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+        },
+    }
+
+    const presentation =
+        status && Object.hasOwn(statuses, status)
+            ? statuses[status]
+            : {
+                label: "Não informado",
+                className:
+                    "border-border bg-muted text-muted-foreground",
+            }
+
+    return (
+        <Badge
+            variant="outline"
+            className={`gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${presentation.className}`}
+        >
+            <span
+                aria-hidden="true"
+                className="size-1.5 shrink-0 rounded-full bg-current"
+            />
+            {presentation.label}
+        </Badge>
+    )
+}
+
 export default function RiskDetailPage() {
     const router = useRouter()
     const params = useParams<{
@@ -2985,9 +3037,7 @@ export default function RiskDetailPage() {
                                                                             </td>
 
                                                                             <td className="px-4 py-3">
-                                                                                <Badge variant="outline">
-                                                                                    {part.logisticsStatus}
-                                                                                </Badge>
+                                                                                {getPartLogisticsStatusPill(part.logisticsStatus)}
                                                                             </td>
 
                                                                             <td className="px-4 py-3">

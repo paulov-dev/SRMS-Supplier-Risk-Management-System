@@ -1,12 +1,15 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 import {
-  supplierScoreLabels,
-  type SupplierScore,
-} from "@/lib/supplier-risk-score"
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 import {
   Table,
@@ -18,274 +21,167 @@ import {
 } from "@/components/ui/table"
 
 import {
-  Card,
-  CardContent,
-} from "@/components/ui/card"
+  bandLabels,
+  bandOf,
+  coverageLabels,
+  coverageOf,
+  openCount,
+  scoreOf,
+  statusLabels,
+  supplierPage,
+  type PortfolioSupplier,
+} from "@/lib/supplier-portfolio"
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
-
-type Supplier = {
-  id: string
-  name: string
-  supplierCodeSap?: string
-  riskScoreSummary?: SupplierScore
-  status:
-  | "ACTIVE"
-  | "UNDER_MONITORING"
-  | "AT_RISK"
-  | "BLOCKED"
-  | "INACTIVE"
-  riskScore?: number | null
-  country: {
-    id: string
-    name: string
-  }
+export const scoreTones = {
+  CRITICAL:
+    "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+  HIGH:
+    "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300",
+  ATTENTION:
+    "border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950/40 dark:text-yellow-300",
+  LOW:
+    "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300",
 }
-
-type Country = {
-  id: string
-  name: string
-}
-
-interface Props {
-  data: Supplier[]
-  countries: Country[]
-  onReload: () => void
-}
-
-const PAGE_SIZE = 10
 
 export function SuppliersTable({
   data,
-  countries,
-}: Props) {
-  const router = useRouter()
-
-  const [search, setSearch] = useState("")
-  const [status, setStatus] = useState("all")
-  const [country, setCountry] = useState("all")
-
-  const [page, setPage] = useState(1)
-
-  const filteredData = useMemo(() => {
-    return data.filter((supplier) => {
-      const matchesName =
-        supplier.name
-          .toLowerCase()
-          .includes(search.toLowerCase())
-
-      const matchesStatus =
-        status === "all"
-          ? true
-          : supplier.status === status
-
-      const matchesCountry =
-        country === "all"
-          ? true
-          : supplier.country.id === country
-
-      return (
-        matchesName &&
-        matchesStatus &&
-        matchesCountry
-      )
-    })
-  }, [data, search, status, country])
-
-  const totalPages = Math.ceil(
-    filteredData.length / PAGE_SIZE
-  )
-
-  const paginatedData = filteredData.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
-  )
-
-  function getStatusBadge(status: string) {
-    switch (status) {
-      case "ACTIVE":
-        return (
-          <Badge variant="default">
-            Ativo
-          </Badge>
-        )
-
-      case "UNDER_MONITORING":
-        return (
-          <Badge variant="secondary">
-            Em Monitoramento
-          </Badge>
-        )
-
-      case "AT_RISK":
-        return (
-          <Badge variant="destructive">
-            RISK
-          </Badge>
-        )
-
-      case "BLOCKED":
-        return (
-          <Badge variant="destructive">
-            Bloqueado
-          </Badge>
-        )
-
-      case "INACTIVE":
-        return (
-          <Badge variant="outline">
-            Inativo
-          </Badge>
-        )
-
-      default:
-        return <Badge>{status}</Badge>
-    }
-  }
+  page,
+  onPageChange,
+  canViewRisks,
+}: {
+  data: PortfolioSupplier[]
+  page: number
+  onPageChange: (page: number) => void
+  canViewRisks: boolean
+}) {
+  const current = supplierPage(data, page)
 
   return (
-    <div className="space-y-6">
-      {/* FILTERS */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            <Input
-              placeholder="Search supplier..."
-              value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
-              }
-            />
-
-            <Select
-              value={status}
-              onValueChange={setStatus}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="all">
-                  Todos
-                </SelectItem>
-
-                <SelectItem value="ACTIVE">
-                  Ativo
-                </SelectItem>
-
-                <SelectItem value="UNDER_MONITORING">
-                  Em monitoramento
-                </SelectItem>
-
-                <SelectItem value="AT_RISK">
-                  Risk
-                </SelectItem>
-
-                <SelectItem value="BLOCKED">
-                  Bloqueado
-                </SelectItem>
-
-                <SelectItem value="INACTIVE">
-                  Inativo
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={country}
-              onValueChange={setCountry}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Country" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="all">
-                  Todos os Países
-                </SelectItem>
-
-                {countries.map((country) => (
-                  <SelectItem
-                    key={country.id}
-                    value={country.id}
-                  >
-                    {country.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* TABLE */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-xl border">
+        <Table className="min-w-[1100px] [&_th]:px-4 [&_th]:py-3 [&_td]:px-4 [&_td]:py-4 [&_td]:align-top">
+          <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Country</TableHead>
+              <TableHead>Fornecedor</TableHead>
+              <TableHead>Status cadastral</TableHead>
               <TableHead>Risk Score</TableHead>
+              <TableHead>RMs abertas</TableHead>
+              <TableHead>
+                RM que determina o score
+              </TableHead>
               <TableHead className="text-right">
-                Actions
+                Detalhes
               </TableHead>
             </TableRow>
           </TableHeader>
 
           <TableBody>
-            {paginatedData.length === 0 ? (
+            {current.items.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={5}
-                  className="h-32 text-center"
+                  colSpan={6}
+                  className="h-36 text-center text-muted-foreground"
                 >
-                  No suppliers found
+                  Nenhum fornecedor encontrado para estes filtros.
                 </TableCell>
               </TableRow>
-            ) : (
-              paginatedData.map((supplier) => (
-                <TableRow key={supplier.id}>
-                  <TableCell className="font-medium">
-                    {supplier.name}
+            )}
+
+            {current.items.map(supplier => {
+              const summary = supplier.riskScoreSummary
+              const band = bandOf(supplier)
+              const coverage = coverageOf(supplier)
+
+              const driver =
+                scoreOf(supplier) !== null
+                  ? summary?.driver
+                  : null
+
+              return (
+                <TableRow
+                  key={supplier.id}
+                  className="transition-colors hover:bg-muted/30"
+                >
+                  <TableCell>
+                    <Link
+                      href={`/suppliers/${supplier.id}`}
+                      prefetch={false}
+                      className="text-base font-semibold text-primary hover:underline"
+                    >
+                      {supplier.name}
+                    </Link>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      SAP {supplier.supplierCodeSap || "não informado"}
+                      {" · "}
+                      {supplier.country?.name || "País não informado"}
+                    </p>
+
+
                   </TableCell>
 
                   <TableCell>
-                    {getStatusBadge(
-                      supplier.status
+                    <Badge variant="outline">
+                      {statusLabels[supplier.status] ??
+                        supplier.status}
+                    </Badge>
+                  </TableCell>
+
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold tabular-nums">
+                        {scoreOf(supplier) ?? "—"}
+                      </span>
+
+                      {band && (
+                        <span
+                          className={`rounded-md border px-2 py-1 text-xs ${scoreTones[band]}`}
+                        >
+                          {bandLabels[band]}
+                        </span>
+                      )}
+                    </div>
+
+                    <p
+                      className={`mt-1 text-xs ${
+                        ["PARTIAL", "UNAVAILABLE", "UNKNOWN"].includes(
+                          coverage
+                        )
+                          ? "text-amber-700 dark:text-amber-400"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {coverageLabels[coverage]}
+                    </p>
+                  </TableCell>
+
+                  <TableCell>
+                    <p className="font-semibold tabular-nums">
+                      {openCount(supplier) ?? "—"}
+                    </p>
+
+                    {summary && summary.bands.CRITICAL > 0 && (
+                      <p className="text-xs text-red-700 dark:text-red-400">
+                        {summary.bands.CRITICAL} com score ≥ 80
+                      </p>
                     )}
                   </TableCell>
 
                   <TableCell>
-                    {supplier.country.name}
-                  </TableCell>
-
-                  <TableCell>
-                    <div>{supplier.riskScore ?? "—"}</div>
-
-                    {supplier.riskScoreSummary && (
-                      <div className="text-xs text-muted-foreground">
-                        {supplierScoreLabels[supplier.riskScoreSummary.status]}
-                      </div>
+                    {driver ? (
+                      canViewRisks ? (
+                        <Link
+                          href={`/rms/${driver.id}`}
+                          prefetch={false}
+                          className="text-sm font-medium text-primary hover:underline"
+                        >
+                          {driver.code}
+                        </Link>
+                      ) : (
+                        <span>{driver.code}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
 
@@ -293,50 +189,63 @@ export function SuppliersTable({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        router.push(
-                          `/suppliers/${supplier.id}`
-                        )
-                      }
+                      asChild
                     >
-                      Visualizar
+                      <Link
+                        prefetch={false}
+                        href={`/suppliers/${supplier.id}`}
+                        aria-label={`Abrir Supplier 360 de ${supplier.name}`}
+                      >
+                        360
+                        <ArrowUpRight className="ml-1 size-4" />
+                      </Link>
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
+              )
+            })}
           </TableBody>
         </Table>
       </div>
 
-      {/* PAGINATION */}
-      <Pagination>
-        <PaginationContent>
-          <PaginationItem>
-            <PaginationPrevious
-              onClick={() =>
-                page > 1 &&
-                setPage(page - 1)
-              }
-            />
-          </PaginationItem>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <p>
+          {data.length === 0
+            ? "0 fornecedores"
+            : `${(current.page - 1) * 10 + 1}–${Math.min(
+                current.page * 10,
+                data.length
+              )} de ${data.length} fornecedores`}
+        </p>
 
-          <PaginationItem>
-            <span className="text-sm px-4">
-              Page {page} of {totalPages || 1}
-            </span>
-          </PaginationItem>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={current.page === 1}
+            onClick={() => onPageChange(current.page - 1)}
+            aria-label="Página anterior"
+          >
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Anterior
+          </Button>
 
-          <PaginationItem>
-            <PaginationNext
-              onClick={() =>
-                page < totalPages &&
-                setPage(page + 1)
-              }
-            />
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
+          <span aria-live="polite">
+            Página {current.page} de {current.totalPages}
+          </span>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={current.page === current.totalPages}
+            onClick={() => onPageChange(current.page + 1)}
+            aria-label="Próxima página"
+          >
+            Próxima
+            <ChevronRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

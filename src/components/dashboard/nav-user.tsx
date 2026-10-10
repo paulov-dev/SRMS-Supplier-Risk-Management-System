@@ -91,7 +91,11 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const { logout } = useAuth()
+  const {
+    user: authenticatedUser,
+    loading: loadingAuth,
+    logout,
+  } = useAuth()
   const router = useRouter()
 
   const [notifications, setNotifications] =
@@ -154,9 +158,9 @@ export function NavUser({
         current.map((item) =>
           item.id === notification.id
             ? {
-                ...item,
-                isRead: true,
-              }
+              ...item,
+              isRead: true,
+            }
             : item
         )
       )
@@ -273,17 +277,17 @@ export function NavUser({
 
             <DropdownMenuGroup>
               <DropdownMenuItem
-                onSelect={() => router.push("/profile")}
+                disabled={loadingAuth || !authenticatedUser?.id}
+                onSelect={() => {
+                  if (!authenticatedUser?.id) return
+
+                  router.push(
+                    `/users/${encodeURIComponent(authenticatedUser.id)}`
+                  )
+                }}
               >
                 <IconUserCircle className="size-4" />
                 Meu perfil
-              </DropdownMenuItem>
-
-              <DropdownMenuItem
-                onSelect={() => router.push("/rms")}
-              >
-                <IconClipboardList className="size-4" />
-                Minhas RMs
               </DropdownMenuItem>
 
               <DropdownMenuItem
