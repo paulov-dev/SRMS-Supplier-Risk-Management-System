@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 
 import { prisma } from "@/app/api/lib/prisma"
 
@@ -11,24 +11,43 @@ type TokenPayload = {
 
 export async function getUserFromRequest() {
   try {
-    const cookieStore = await cookies()
+    const requestHeaders = await headers()
+    const authorization = requestHeaders.get("authorization")
 
-    const token = cookieStore.get("token")?.value
+    let token: string | undefined
+
+    if (authorization !== null) {
+      const match = /^Bearer\s+(\S+)$/i.exec(authorization.trim())
+
+      if (!match) {
+        return null
+      }
+
+      token = match[1]
+    } else {
+      const cookieStore = await cookies()
+      token = cookieStore.get("token")?.value
+    }
 
     if (!token) {
       return null
     }
 
-    const decoded = jwt.verify(
-      token,
-      JWT_SECRET
-    ) as TokenPayload
+    const decoded = jwt.verify(token, JWT_SECRET)
+
+    if (
+      typeof decoded === "string" ||
+      typeof decoded.userId !== "string"
+    ) {
+      return null
+    }
+
+    const { userId } = decoded as TokenPayload
 
     const user = await prisma.user.findUnique({
       where: {
-        id: decoded.userId,
+        id: userId,
       },
-
       include: {
         roles: {
           include: {
@@ -45,6 +64,10 @@ export async function getUserFromRequest() {
         },
       },
     })
+
+    if (!user?.isActive) {
+      return null
+    }
 
     return user
   } catch {

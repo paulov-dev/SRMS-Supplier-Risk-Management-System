@@ -54,8 +54,8 @@ async function createAuditLog({
       ...newValue,
       ...(userAgent
         ? {
-            userAgent,
-          }
+          userAgent,
+        }
         : {}),
     }
 
@@ -159,9 +159,26 @@ export async function POST(req: Request) {
       },
     })
 
-    const response = NextResponse.json({
-      message: "Login realizado",
-    })
+    const isMobile =
+      req.headers.get("x-client-type") === "mobile"
+
+    const response = NextResponse.json(
+      {
+        message: "Login realizado",
+        ...(isMobile
+          ? {
+            accessToken: token,
+            tokenType: "Bearer",
+            expiresIn: 60 * 60 * 24 * 7,
+          }
+          : {}),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    )
 
     response.cookies.set("token", token, {
       httpOnly: true,
